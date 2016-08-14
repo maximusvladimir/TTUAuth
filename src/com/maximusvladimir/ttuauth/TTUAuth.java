@@ -1,0 +1,532 @@
+package com.maximusvladimir.ttuauth;
+
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import com.maximusvladimir.ttuauth.data.DayOfWeek;
+import com.maximusvladimir.ttuauth.data.FinalGradeNode;
+import com.maximusvladimir.ttuauth.data.LoginResult;
+import com.maximusvladimir.ttuauth.data.ScheduleNode;
+import com.maximusvladimir.ttuauth.helpers.Cookie;
+import com.maximusvladimir.ttuauth.helpers.HTMLParser;
+import com.maximusvladimir.ttuauth.helpers.HTMLTag;
+import com.maximusvladimir.ttuauth.helpers.Utility;
+
+/**
+ * A general purpose class for accessing the main TTU website.
+ */
+public class TTUAuth {
+	private static String COOKIE0_PAGE = "https://cas.texastech.edu/sso3.4/login?service=https%3A%2F%2Fportal.texastech.edu%2Fc%2Fportal%2Flogin";
+	private static String COOKIE1_PAGE = "https://eraider.ttu.edu/signin.asp?redirect=https%3A%2F%2Fcas.texastech.edu%2Fsso3.4%3FredirectUrl%3D%252Fsso3.4%252Flogin%253Fservice%253Dhttps%25253A%25252F%25252Fportal.texastech.edu%25252Fc%25252Fportal%25252Flogin";
+	private static String COOKIE2_PAGE = "https://eraider.ttu.edu/signin.asp?redirect=https%3A%2F%2Fcas.texastech.edu%2Fsso3.4%3FredirectUrl%3D%252Fsso3.4%252Flogin%253Fservice%253Dhttps%25253A%25252F%25252Fportal.texastech.edu%25252Fc%25252Fportal%25252Flogin&jsct=1";
+	private static String COOKIE_FG_PAGE = "https://cas.texastech.edu/sso3.4/login?service=https%3A%2F%2Foraapps.texastech.edu%3A443%2Fssomanager%2Fc%2FSSB%3Fpkg%3Dbwskogrd.P_ViewTermGrde";
+	private static String COOKIE_ORA_PAGE = "https://oraapps.texastech.edu/ssomanager/c/SSB?pkg=bwskogrd.P_ViewTermGrde";
+	private static String LOGIN_PAGE = "https://eraider.ttu.edu/authenticate.asp";
+	private static String LOGOUT_PAGE = "https://portal.texastech.edu/c/portal/logout";
+	private static String FINAL_GRADE_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewTermGrde";
+	private static String FINAL_GRADE_POST_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewGrde";
+	private static String SCH_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskfshd.P_CrseSchd";
+
+	private Cookie cookie_aspSessionID;
+	private Cookie cookie_sessionID;
+	private String redirectTo;
+	private String hiddenKey;
+	private String hiddenVal;
+	private String signInText;
+
+	private Cookie casCookie;
+	private Cookie cas2Cookie;
+	private Cookie idmCookie;
+	private Cookie ssbCookie;
+	private Cookie elcCookie;
+	private Cookie esiCookie;
+
+	private boolean isLoggedIn = false;
+	private boolean isSSBLoggedIn = false;
+	private String raiderID = null;
+	private String name = null;
+
+	/**
+	 * Creates a new instance of the main TTU website auth.
+	 */
+	public TTUAuth() {
+	}
+
+	/**
+	 * Determines if the user has been logged in yet or not.
+	 * 
+	 * @return true if the user is logged in.
+	 */
+	public boolean isLoggedIn() {
+		return isLoggedIn;
+	}
+
+	/**
+	 * Gets a list of grades for each course for a specific term. Note: you must
+	 * call getFinalGradeList() for this to work.
+	 * 
+	 * @param semesterID
+	 *            The term to get the grades for.
+	 * @return A list of all the courses.
+	 * @throws IOException
+	 */
+	public ArrayList<FinalGradeNode> getFinalGrade(int semesterID)
+			throws IOException {
+		if (!isLoggedIn || !isSSBLoggedIn)
+			return null;
+
+		HttpURLConnection conn = Utility.getPostConn(FINAL_GRADE_POST_PAGE);
+		conn.setRequestProperty("Cookie",
+				ssbCookie.getKey() + "=" + ssbCookie.getValue() + "; "
+						+ idmCookie.getKey() + "=" + idmCookie.getValue());
+		conn.setRequestProperty("Origin", "https://ssb.texastech.edu");
+		String query = "term_in=" + semesterID;
+		conn.setRequestProperty("Content-Length", query.length() + "");
+
+		DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
+		dos.writeBytes(query);
+		dos.close();
+
+		ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+		for (int i = 0; i < cookies.size(); i++) {
+			if (cookies.get(i).getKey().startsWith("SESS")) {
+				ssbCookie = cookies.get(i);
+			}
+		}
+
+		Document doc = Jsoup.parse(Utility.read(conn));
+		Element dataTable = null;
+		for (Element element : doc.select(".datadisplaytable")) {
+			Element first = element.select("caption").first();
+			if (first != null && first.text().indexOf("Course work") != -1) {
+				dataTable = element;
+				break;
+			}
+		}
+
+		ArrayList<FinalGradeNode> nodes = new ArrayList<FinalGradeNode>();
+
+		for (Element element : dataTable.select("tbody").first().select("tr")) {
+			if (element.select("th").size() == 0) {
+				FinalGradeNode node = new FinalGradeNode();
+				node.setCrn(element.child(0).text());
+				node.setSubject(element.child(1).text());
+				node.setCourse(element.child(2).text());
+				node.setCourseTitle(element.child(4).text());
+				node.setCampus(element.child(5).text());
+				node.setGrade(element.child(6).text());
+				node.setHours(element.child(9).text());
+				nodes.add(node);
+			}
+		}
+
+		return nodes;
+	}
+
+	/**
+	 * Gets a list of all the available terms for which the final grades can be
+	 * pulled.
+	 * 
+	 * @return A dictionary containing the id of the term and the name of the
+	 *         term.
+	 * @throws IOException
+	 */
+	public HashMap<Integer, String> getFinalGradeList() throws IOException {
+		if (!isLoggedIn)
+			return null;
+
+		if (!isSSBLoggedIn) {
+			doSSBLogin();
+		}
+
+		HttpURLConnection conn = Utility.getGetConn(FINAL_GRADE_PAGE);
+		conn.setRequestProperty("Cookie", Cookie.chain(idmCookie));
+		conn.setInstanceFollowRedirects(false);
+
+		ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+		for (int i = 0; i < cookies.size(); i++) {
+			if (cookies.get(i).getKey().startsWith("SESSI")) {
+				ssbCookie = cookies.get(i);
+			}
+		}
+
+		HashMap<Integer, String> map = new HashMap<Integer, String>();
+
+		HTMLParser parser = new HTMLParser(Utility.read(conn));
+		ArrayList<HTMLTag> tags = parser.getAllByTag("OPTION");
+		for (int i = 0; i < tags.size(); i += 2) {
+			HTMLTag id = tags.get(i);
+			HTMLTag val = tags.get(i + 1);
+			map.put(Integer.parseInt(id.getAttr("VALUE")), val.toString()
+					.replace("<", "").replace(">", ""));
+		}
+
+		return map;
+	}
+
+	/**
+	 * Gets a schedule for the current semester (fall/spring). Summer not
+	 * supported.
+	 * 
+	 * @throws IOException
+	 */
+	public ArrayList<ScheduleNode> getSchedule() throws IOException {
+		// let's grab the latest date:
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(new Date());
+		int month = cal.get(Calendar.MONTH);
+		String dt = "";
+		if (month >= 5) {
+			dt = "09/"
+					+ String.format("%02d",
+							Utility.getFirstMonday(cal.get(Calendar.YEAR), 8))
+					+ "/" + cal.get(Calendar.YEAR);
+		} else {
+			dt = "02/"
+					+ String.format("%02d",
+							Utility.getFirstMonday(cal.get(Calendar.YEAR), 1))
+					+ "/" + cal.get(Calendar.YEAR);
+		}
+
+		if (!isSSBLoggedIn) {
+			doSSBLogin();
+		}
+
+		if (ssbCookie == null) {
+			HttpURLConnection conn = Utility.getGetConn(SCH_PAGE);
+			conn.setRequestProperty("Cookie", Cookie.chain(idmCookie));
+			conn.setInstanceFollowRedirects(false);
+
+			ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+			for (int i = 0; i < cookies.size(); i++) {
+				if (cookies.get(i).getKey().startsWith("SESSI")) {
+					ssbCookie = cookies.get(i);
+				}
+			}
+		}
+
+		HttpURLConnection conn = Utility.getGetConn(SCH_PAGE
+				+ "?start_date_in=" + dt);
+		conn.setRequestProperty("Cookie", Cookie.chain(idmCookie, ssbCookie));
+		conn.setInstanceFollowRedirects(false);
+
+		Document doc = Jsoup.parse(Utility.read(conn));
+		HashMap<String, ArrayList<DayOfWeek>> entries = new HashMap<String, ArrayList<DayOfWeek>>();
+		for (Element element : doc.select(".datadisplaytable tr")) {
+			for (Element td : element.select(".ddlabel")) {
+				Element par = td.parent();
+				Elements childs = par.children();
+				Collections.reverse(childs);
+				int counter = 0;
+				for (Element el : childs) {
+					if (el.equals(td)) {
+						// this is a bit odd... basically the table is reversed,
+						// so we have to count backwards.
+						counter = 7 - (counter + 1);
+						break;
+					} else {
+						counter++;
+					}
+				}
+				if (td.nodeName().equals("td")) {
+					String data = td.child(0).html();
+					if (data.indexOf("<br>") != -1) {
+						DayOfWeek dow = DayOfWeek.fromInt(counter);
+						if (entries.containsKey(data)) {
+							entries.get(data).add(dow);
+						} else {
+							entries.put(data, new ArrayList<DayOfWeek>());
+							entries.get(data).add(dow);
+						}
+					} else {
+						// report problem here.
+					}
+				}
+			}
+		}
+		ArrayList<ScheduleNode> nodes = new ArrayList<ScheduleNode>();
+		for (String entry : entries.keySet()) {
+			ScheduleNode n = new ScheduleNode();
+			String[] splits = entry.split("<br>");
+			String courseName = splits[0];
+			String time = splits[2];
+			String location = splits[3];
+			n.setCourse(courseName);
+			Object[] dowso = entries.get(entry).toArray();
+			DayOfWeek[] dows = new DayOfWeek[dowso.length];
+			for (int i = 0; i < dowso.length; i++) {
+				dows[i] = (DayOfWeek) dowso[i];
+			}
+			int[] times = Utility.convertToTime(time);
+			if (times != null) {
+				n.setStartHour(times[0]);
+				n.setStartMin(times[1]);
+				n.setEndHour(times[2]);
+				n.setEndMin(times[3]);
+			}
+			n.setDaysOfWeek(dows);
+			n.setLocation(location);
+			nodes.add(n);
+		}
+
+		return nodes;
+	}
+
+	/**
+	 * Performs an eRaider login.
+	 * 
+	 * @param username
+	 *            The username for the account.
+	 * @param password
+	 *            The password for the account.
+	 * @return A value indicating the state of the login.
+	 */
+	public LoginResult login(String username, String password) {
+		try {
+			getCASCookie();
+			if (!getLoginPage()) {
+				return LoginResult.OTHER;
+			}
+			if (!postLogin(username, password)) {
+				return LoginResult.BAD_AUTH;
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		isLoggedIn = true;
+
+		return LoginResult.SUCCESS;
+	}
+
+	/**
+	 * Gets the full name of the user. Note: must be logged in to query. This
+	 * may not be available immediately after login. Add a full login handler to
+	 * see if it is ready.
+	 * 
+	 * @return
+	 */
+	public String getFullName() {
+		return name;
+	}
+
+	/**
+	 * Gets the RaiderID of the user. Note: must be logged in to query. This may
+	 * not be available immediately after login. Add a full login handler to see
+	 * if it is ready.
+	 * 
+	 * @return
+	 */
+	public String getRaiderID() {
+		return raiderID;
+	}
+
+	/**
+	 * Forces the server to log out the user account.
+	 */
+	public void logout() {
+		try {
+			HttpURLConnection conn = Utility.getGetConn(LOGOUT_PAGE);
+			conn.setInstanceFollowRedirects(false);
+			conn.setRequestProperty("Cookie", Cookie.chain(cookie_sessionID));
+			
+			conn = Utility.getGetConn(conn.getHeaderFields().get("Location").get(0));
+			conn.setInstanceFollowRedirects(false);
+			conn.setRequestProperty("Cookie", Cookie.chain(casCookie, cas2Cookie));
+			Utility.readByte(conn);
+			
+			conn = Utility.getGetConn(conn.getHeaderFields().get("Location").get(0));
+			conn.setInstanceFollowRedirects(false);
+			conn.setRequestProperty("Cookie", Cookie.chain(cookie_aspSessionID, new Cookie("ctest", "TRUE"), elcCookie, esiCookie));
+			Utility.readByte(conn);
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+	}
+
+	private void doSSBLogin() throws IOException {
+		Cookie ora = getORACookie();
+
+		HttpURLConnection conn = Utility.getGetConn(COOKIE_FG_PAGE);
+		conn.setRequestProperty("Cookie", Cookie.chain(cas2Cookie, casCookie));
+		conn.setInstanceFollowRedirects(false);
+		String location = conn.getHeaderFields().get("Location").get(0);
+
+		conn = Utility.getGetConn(location);
+		conn.setRequestProperty("Cookie", ora.getKey() + "=" + ora.getValue());
+		conn.setInstanceFollowRedirects(false);
+		ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+		for (int i = 0; i < cookies.size(); i++) {
+			if (cookies.get(i).getKey().startsWith("IDMSESS")) {
+				idmCookie = cookies.get(i);
+			}
+		}
+		isSSBLoggedIn = true;
+	}
+
+	Cookie[] getCbordLoginCookies() {
+		return new Cookie[] { cookie_aspSessionID, elcCookie,
+				new Cookie("ctest", "TRUE"), esiCookie };
+	}
+
+	Cookie[] getBlackboardLoginCookies() {
+		return new Cookie[] { cookie_aspSessionID, new Cookie("ctest", "TRUE"),
+				elcCookie, esiCookie };
+	}
+
+	private Cookie getORACookie() throws IOException {
+		HttpURLConnection conn = Utility.getGetConn(COOKIE_ORA_PAGE);
+		conn.setInstanceFollowRedirects(false);
+		ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+		for (int i = 0; i < cookies.size(); i++) {
+			if (cookies.get(i).getKey().equals("JSESSIONID")) {
+				return cookies.get(i);
+			}
+		}
+
+		return null;
+	}
+
+	private void getCASCookie() throws IOException {
+		HttpURLConnection conn = Utility.getGetConn(COOKIE0_PAGE);
+		conn.setInstanceFollowRedirects(false);
+		ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+		for (int i = 0; i < cookies.size(); i++) {
+			if (cookies.get(i).getKey().startsWith("JSESSIONID")) {
+				cookie_sessionID = cookies.get(i);
+			}
+		}
+	}
+
+	private boolean getLoginPage() throws IOException {
+		HttpURLConnection conn = Utility.getGetConn(COOKIE1_PAGE);
+		ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+		for (int i = 0; i < cookies.size(); i++) {
+			if (cookies.get(i).getKey().startsWith("ASPSESSION")) {
+				cookie_aspSessionID = cookies.get(i);
+			}
+		}
+		if (cookie_aspSessionID == null) {
+			// throw new out of date
+		}
+
+		conn = Utility.getGetConn(COOKIE2_PAGE);
+		conn.setRequestProperty("Cookie",
+				Cookie.chain(new Cookie("ctest", "TRUE"), cookie_aspSessionID));
+		cookies = Cookie.getCookies(conn);
+
+		HTMLParser parser = new HTMLParser(Utility.read(conn));
+		ArrayList<HTMLTag> tags = parser.getAllByTag("input");
+		for (int i = 0; i < tags.size(); i++) {
+			HTMLTag tag = tags.get(i);
+			String name = tag.getAttr("name");
+			if (name != null) {
+				if (name.equals("redirect")) {
+					redirectTo = tag.getAttr("value");
+				} else if (name.equals("login")) {
+					signInText = tag.getAttr("value");
+				} else if (!name.equals("username") && !name.equals("password")) {
+					hiddenKey = name;
+					hiddenVal = tag.getAttr("value");
+				}
+			}
+		}
+		
+		return redirectTo != null;
+	}
+
+	private boolean postLogin(String username, String password)
+			throws IOException {
+		HttpURLConnection conn = Utility.getPostConn(LOGIN_PAGE);
+		conn.setRequestProperty("Cookie",
+				Cookie.chain(new Cookie("ctest", "TRUE"), cookie_aspSessionID));
+		conn.setRequestProperty("Referer", COOKIE1_PAGE);
+		String query = "redirect=" + URLEncoder.encode(redirectTo, "UTF-8")
+				+ "&" + hiddenKey + "=" + hiddenVal + "&" + "username="
+				+ username + "&password="
+				+ URLEncoder.encode(password, "UTF-8") + "&login="
+				+ URLEncoder.encode(signInText, "UTF-8");
+		conn.setRequestProperty("Content-Length", query.length() + "");
+		conn.setInstanceFollowRedirects(false);
+		DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
+		dos.writeBytes(query);
+		dos.close();
+
+		ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+		for (int i = 0; i < cookies.size(); i++) {
+			Cookie cook = cookies.get(i);
+			if (cook.getKey().startsWith("elc")) {
+				elcCookie = cook;
+			}
+			if (cook.getKey().startsWith("esi")) {
+				esiCookie = cook;
+			}
+		}
+
+		if (Utility.read(conn).indexOf("signin.asp?redirect=") != -1) {
+			return false;
+		}
+
+		int follows = 0;
+		while (conn.getHeaderFields().containsKey("Location") && follows++ < 6) {
+			String location = conn.getHeaderFields().get("Location").get(0);
+			HttpURLConnection conn2 = Utility.getGetConn(location);
+			conn2.setInstanceFollowRedirects(false);
+			String regCookie = Cookie.chain(cookie_sessionID);
+			if (location.indexOf("https://cas.texastech.edu/") == -1
+					&& location.indexOf("/c/portal/login?ticket") != -1) {
+				conn2.setRequestProperty("Cookie",
+						"LP_TARGET_URL=https%3A%2F%2Fportal.texastech.edu%2F");
+			} else {
+				conn2.setRequestProperty("Cookie", regCookie);
+			}
+
+			if (location.equals("https://portal.texastech.edu/")) {
+
+				String html = Utility.read(conn2);
+				int index = html.indexOf("dockbarDisplayName");
+				if (index != -1) {
+					String nm = html.substring(index);
+					nm = nm.substring(nm.indexOf(">") + 1, nm.indexOf("<"));
+					name = nm;
+				}
+				index = html.indexOf("dockbarRNumber");
+				if (index != -1) {
+					String nm = html.substring(index);
+					nm = nm.substring(nm.indexOf(">") + 1, nm.indexOf("<"));
+					raiderID = nm;
+				}
+			}
+
+			cookies = Cookie.getCookies(conn2);
+			for (int i = 0; i < cookies.size(); i++) {
+				Cookie cookie = cookies.get(i);
+				if (cookie.getKey().startsWith("JSESSION")) {
+					cookie_sessionID = cookie;
+					if (location.indexOf("/login?redirectUrl=") != -1) {
+						casCookie = cookie;
+					}
+				}
+				if (cookie.getKey().indexOf("CASTGC") != -1) {
+					cas2Cookie = cookie;
+				}
+			}
+
+			conn = conn2;
+		}
+
+		return true;
+	}
+}
