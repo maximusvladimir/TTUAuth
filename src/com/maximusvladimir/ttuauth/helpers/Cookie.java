@@ -36,6 +36,8 @@ public class Cookie {
 	}
 	
 	public static String chain(ArrayList<Cookie> args) {
+		if (args == null)
+			return "";
 		Cookie[] cks = new Cookie[args.size()];
 		for (int i = 0; i < cks.length; i++) {
 			cks[i] = args.get(i);
@@ -44,6 +46,9 @@ public class Cookie {
 	}
 	
 	public static String chain(Cookie... args) {
+		if (args == null)
+			return "";
+		
 		String cookie = "";
 		for (int i = 0; i < args.length; i++) {
 			if (args[i] == null)
@@ -64,6 +69,9 @@ public class Cookie {
 	public static ArrayList<Cookie> getCookies(HttpURLConnection conn) {
 		ArrayList<Cookie> cookies = new ArrayList<Cookie>();
 		
+		if (conn == null)
+			return cookies;
+		
 		if (conn.getHeaderFields().containsKey("Set-Cookie")) {
 			List<String> cookiesRaw = conn.getHeaderFields().get("Set-Cookie");
 			for (int i = 0; i < cookiesRaw.size(); i++) {
@@ -81,6 +89,9 @@ public class Cookie {
 	}
 	
 	public static Cookie getCookie(ArrayList<Cookie> cookies, String key) {
+		if (cookies == null)
+			return null;
+		
 		for (int i = 0; i < cookies.size(); i++) {
 			if (cookies.get(i).getKey().equals(key)) {
 				return cookies.get(i);

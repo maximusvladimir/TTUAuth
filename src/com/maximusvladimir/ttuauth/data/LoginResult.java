@@ -18,11 +18,12 @@ public enum LoginResult {
 	 */
 	PASSWORD_EXPIRED,
 	/**
-	 * Occurs when some other problem has occurred.
+	 * Occurs when the user is logged out of the main TTU site.
 	 */
-	OTHER,
+	MAIN_LOGOUT,
 	/**
-	 * Occurs when the session has expired.
+	 * Occurs when some other problem has occurred.
+	 * This result is unsuccessful.
 	 */
-	SESSION_EXPIRED
+	OTHER
 }

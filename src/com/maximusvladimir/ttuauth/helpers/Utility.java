@@ -6,6 +6,8 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Calendar;
+import java.util.List;
+import java.util.Map;
 
 public class Utility {
 	private static String USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:47.0) Gecko/20100101 Firefox/47.0";
@@ -33,6 +35,18 @@ public class Utility {
 		conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
 		conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
 		return conn;
+	}
+	
+	public static String getLocation(HttpURLConnection conn) {
+		Map<String, List<String>> headers = conn.getHeaderFields();
+		if (!headers.containsKey("Location"))
+			return null;
+		
+		List<String> locations = headers.get("Location");
+		if (locations == null || locations.size() < 1)
+			return null;
+		
+		return locations.get(0);
 	}
 	
 	public static String read(HttpURLConnection conn) throws IOException {
