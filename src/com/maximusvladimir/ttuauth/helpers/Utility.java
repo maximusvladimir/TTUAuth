@@ -17,10 +17,14 @@ public class Utility {
 	public static HttpURLConnection getGetConn(String url) throws IOException {
 		URL u = new URL(url);
 		HttpURLConnection conn = (HttpURLConnection) u.openConnection();
-		conn.setConnectTimeout(AuthSettings.TIMEOUT_CONNECT);
-		conn.setReadTimeout(AuthSettings.TIMEOUT_READ);
-		conn.setDoOutput(true);
 		conn.setRequestMethod("GET");
+		if (AuthSettings.TIMEOUT_CONNECT != 0) {
+			conn.setConnectTimeout(AuthSettings.TIMEOUT_CONNECT);
+		}
+		if (AuthSettings.TIMEOUT_READ != 0) {
+			conn.setReadTimeout(AuthSettings.TIMEOUT_READ);
+		}
+		//conn.setDoOutput(true); this causes a bug on Android.
 		conn.setRequestProperty("Accept", ACCEPT);
 		conn.setRequestProperty("User-Agent", AuthSettings.USER_AGENT);
 		conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
@@ -30,11 +34,15 @@ public class Utility {
 	public static HttpURLConnection getPostConn(String url) throws IOException {
 		URL u = new URL(url);
 		HttpURLConnection conn = (HttpURLConnection) u.openConnection();
-		conn.setConnectTimeout(AuthSettings.TIMEOUT_CONNECT);
-		conn.setReadTimeout(AuthSettings.TIMEOUT_READ);
+		conn.setRequestMethod("POST");
+		if (AuthSettings.TIMEOUT_CONNECT != 0) {
+			conn.setConnectTimeout(AuthSettings.TIMEOUT_CONNECT);
+		}
+		if (AuthSettings.TIMEOUT_READ != 0) {
+			conn.setReadTimeout(AuthSettings.TIMEOUT_READ);
+		}
 		conn.setDoInput(true);
 		conn.setDoOutput(true);
-		conn.setRequestMethod("POST");
 		conn.setRequestProperty("Accept", ACCEPT);
 		conn.setRequestProperty("User-Agent", AuthSettings.USER_AGENT);
 		conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
@@ -52,6 +60,13 @@ public class Utility {
 			return null;
 		
 		return locations.get(0);
+	}
+	
+	public static void sleep(long time) {
+		long start = System.currentTimeMillis();
+		while (System.currentTimeMillis() - start < time) {
+			Thread.yield();
+		}
 	}
 	
 	public static String read(HttpURLConnection conn) throws IOException {

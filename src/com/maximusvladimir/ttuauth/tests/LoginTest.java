@@ -8,32 +8,38 @@ import com.maximusvladimir.ttuauth.RaiderFundAuth;
 import com.maximusvladimir.ttuauth.TTUAuth;
 
 public class LoginTest {
+	public static final boolean USE_FIDDLER = true;
+
 	public static void main(String[] args) {
-		Properties sysProperties = System.getProperties();
-		sysProperties.put("https.proxyHost", "127.0.0.1");
-		sysProperties.put("https.proxyPort", "8888");
-		sysProperties.put("http.proxyHost", "127.0.0.1");
-		sysProperties.put("http.proxyPort", "8889");
-		System.setProperty("javax.net.ssl.trustStore",
-				"C:\\Program Files\\Java\\jre1.8.0_91\\lib\\security\\FiddlerKeystore");
-		System.setProperty("javax.net.ssl.trustStorePassword", "123456");
+		if (USE_FIDDLER) {
+			Properties sysProperties = System.getProperties();
+			sysProperties.put("https.proxyHost", "127.0.0.1");
+			sysProperties.put("https.proxyPort", "8888");
+			sysProperties.put("http.proxyHost", "127.0.0.1");
+			sysProperties.put("http.proxyPort", "8889");
+			System.setProperty("javax.net.ssl.trustStore",
+					"C:\\Program Files\\Java\\jdk1.8.0_25\\lib\\security\\FiddlerKeystore");
+			System.setProperty("javax.net.ssl.trustStorePassword", "123456");
+		}
+		
+		System.setProperty("https.protocols", "TLSv1.1,TLSv1.2,TLSv1");
 
 		long start = 0, end = 0;
-		
+
 		TTUAuth auth = getAuthFromFile();
 
 		start = System.currentTimeMillis();
 		auth.login();
 		end = System.currentTimeMillis();
-		
+
 		System.out.println("Login took: " + (end - start) + " ms.");
 
-		start = System.currentTimeMillis();
+		/*start = System.currentTimeMillis();
 		RaiderFundAuth rfa = new RaiderFundAuth(auth);
 		rfa.login();
 		System.out.println(rfa.getRaiderFunds());
 		end = System.currentTimeMillis();
-		
+
 		System.out.println("RFA GET took: " + (end - start) + " ms.");
 
 		start = System.currentTimeMillis();
@@ -44,10 +50,10 @@ public class LoginTest {
 		}
 		System.out.println(auth.getSchedule());
 		end = System.currentTimeMillis();
-		
+
 		System.out.println("FINAL GRADE + SCHEDULE GET took: " + (end - start)
 				+ " ms.");
-
+*/
 		start = System.currentTimeMillis();
 		BlackboardAuth bb = new BlackboardAuth(auth);
 		bb.login();
@@ -56,12 +62,12 @@ public class LoginTest {
 			System.out.println(bb.getClassGrades(classID));
 		}
 		end = System.currentTimeMillis();
-		
+
 		System.out.println("CLS GET took: " + (end - start) + " ms.");
 
 		auth.logout();
 	}
-	
+
 	private static TTUAuth getAuthFromFile() {
 		try {
 			String path = LoginTest.class.getResource("cred.dat").toString();

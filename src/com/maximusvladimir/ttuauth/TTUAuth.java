@@ -479,11 +479,27 @@ public class TTUAuth implements IAuth {
 			ErrorType etype, String additionalInfo) {
 		
 		String occurance = new Date().toString();
+		
+		String stack = "";
+		if (t != null) {
+			stack = "{";
+			StackTraceElement[] els = t.getStackTrace();
+			for (int i = 0; i < els.length; i++) {
+				StackTraceElement ste = els[i];
+				stack += ste.toString();
+				if (i != els.length - 1) {
+					stack += "-> ";
+				}
+			}
+			stack += "}";
+		}
+		
 		System.err.println("An error has occured"
 				+ (t != null ? " \"" + t.getMessage() + "\". " : ". ")
 				+ (localSource != null ? "Source: " + localSource + ". " : "")
 				+ (etype != ErrorType.None ? "Severity: " + etype.name() + ". "
 						: "") + "Additional info: \"" + additionalInfo + "\". "
+				+ (!stack.equals("") ? "Stack: " + stack + ". " : "")
 				+ "Occurred: " + occurance + ".");
 		
 		for (int i = 0; i < errorHandlers.size(); i++) {

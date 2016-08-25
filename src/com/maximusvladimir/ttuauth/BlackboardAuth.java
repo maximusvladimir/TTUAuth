@@ -125,6 +125,9 @@ public class BlackboardAuth implements IAuth {
 		String jsonraw = "";
 		Map<String, String> map = new HashMap<String, String>();
 		try {
+			// waits for the stream to be ready on the server side.
+			Utility.sleep(50);
+			
 			HttpURLConnection conn = Utility.getPostConn(STREAM);
 			conn.setRequestProperty("Cookie", Cookie.chain(currCookies));
 			String query = "cmd=loadStream&streamName=mygrades&providers=%7B%7D&forOverview=false";

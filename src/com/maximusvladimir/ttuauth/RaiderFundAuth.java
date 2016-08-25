@@ -23,7 +23,8 @@ public class RaiderFundAuth implements IAuth {
 	private static String FUND_OVERVIEW = "https://get.cbord.com/raidercard/full/funds_overview_partial.php";
 
 	private Cookie awseCookie;
-	private Cookie phpCookie;
+	private Cookie phpCookie1;
+	private Cookie phpCookie2;
 
 	private boolean loggedIn = false;
 
@@ -60,7 +61,7 @@ public class RaiderFundAuth implements IAuth {
 			HttpURLConnection conn = Utility.getGetConn(FUND_HOME);
 			conn.setInstanceFollowRedirects(false);
 			conn.setRequestProperty("Cookie", Cookie.chain(awseCookie,
-					phpCookie, new Cookie("no_login_guest_user", "")));
+					phpCookie1, phpCookie2, new Cookie("no_login_guest_user", "")));
 			html = Utility.read(conn);
 			int index = html.indexOf("getOverview");
 			String userID = html.substring(index);
@@ -80,7 +81,7 @@ public class RaiderFundAuth implements IAuth {
 			conn.setRequestProperty("Referer",
 					"https://get.cbord.com/raidercard/full/funds_home.php");
 			conn.setRequestProperty("Cookie", Cookie.chain(awseCookie,
-					phpCookie, new Cookie("no_login_guest_user", "")));
+					phpCookie1, phpCookie2, new Cookie("no_login_guest_user", "")));
 			DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
 			dos.writeBytes(query);
 			dos.close();
@@ -123,12 +124,15 @@ public class RaiderFundAuth implements IAuth {
 					awseCookie = cookie;
 				}
 				if (cookie.getKey().startsWith("PHPS")) {
-					phpCookie = cookie;
+					if (phpCookie1 == null)
+						phpCookie1 = cookie;
+					else
+						phpCookie2 = cookie;
 				}
 			}
-			if (awseCookie == null || phpCookie == null)
+			if (awseCookie == null || phpCookie1 == null || phpCookie2 == null)
 				TTUAuth.logError(new IOException("Cookie values: " + awseCookie
-						+ " " + phpCookie), "raiderfundlogincookie",
+						+ " " + phpCookie1 + " " + phpCookie2), "raiderfundlogincookie",
 						ErrorType.APIChange);
 
 			conn = Utility.getGetConn(FUND_LOGIN);
@@ -173,7 +177,7 @@ public class RaiderFundAuth implements IAuth {
 			conn = Utility.getGetConn(CAS1_LOGIN);
 			conn.setInstanceFollowRedirects(false);
 			conn.setRequestProperty("Cookie",
-					Cookie.chain(awseCookie, phpCookie));
+					Cookie.chain(awseCookie, phpCookie1, phpCookie2));
 			Utility.readByte(conn);
 
 			conn = Utility.getGetConn(FUND_LOGIN);
@@ -190,13 +194,13 @@ public class RaiderFundAuth implements IAuth {
 			conn = Utility.getGetConn(location);
 			conn.setInstanceFollowRedirects(false);
 			conn.setRequestProperty("Cookie",
-					Cookie.chain(awseCookie, phpCookie));
+					Cookie.chain(awseCookie, phpCookie1, phpCookie2));
 			Utility.readByte(conn);
 
 			conn = Utility.getGetConn(FUND_INDEX);
 			conn.setInstanceFollowRedirects(false);
 			conn.setRequestProperty("Cookie", Cookie.chain(awseCookie,
-					phpCookie, new Cookie("no_login_guest_user", "")));
+					phpCookie1, phpCookie2, new Cookie("no_login_guest_user", "")));
 			Utility.readByte(conn);
 		} catch (IOException e) {
 			TTUAuth.logError(e, "raiderfundlogin", ErrorType.Fatal);
