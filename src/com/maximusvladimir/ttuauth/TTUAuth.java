@@ -60,6 +60,7 @@ public class TTUAuth implements IAuth {
 	private String raiderID = null;
 	private String name = null;
 	private boolean soonToExpire = false;
+	private boolean passwordExpired = false;
 
 	private long loginTime = 0;
 
@@ -366,6 +367,11 @@ public class TTUAuth implements IAuth {
 		
 		if (soonToExpire)
 			return LoginResult.PASSWORD_EXPIRING;
+		
+		if (passwordExpired) {
+			isLoggedIn = false;
+			return LoginResult.PASSWORD_EXPIRED;
+		}
 
 		return LoginResult.SUCCESS;
 	}
@@ -633,9 +639,15 @@ public class TTUAuth implements IAuth {
 
 		int follows = 0;
 		soonToExpire = false;
+		passwordExpired = false;
 		while (conn.getHeaderFields().containsKey("Location") && follows++ < 6) {
 			String location = conn.getHeaderFields().get("Location").get(0);
-			if (location.indexOf("password.asp?pwdStatus=") != -1) {
+			if (location.indexOf("password.asp?pwdStatus=-1") != -1) {
+				passwordExpired = true;
+				// returns true so we don't think it's a bad auth.
+				return true;
+			}
+			else if (location.indexOf("password.asp?pwdStatus=") != -1) {
 				soonToExpire = true;
 				String nextUrl = location.substring(location.indexOf("redirect=") + "redirect=".length());
 				nextUrl = java.net.URLDecoder.decode(nextUrl, "UTF-8");
