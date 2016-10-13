@@ -27,7 +27,7 @@ import com.maximusvladimir.ttuauth.helpers.Utility;
 public class BlackboardAuth implements IAuth {
 	private static String LOGIN_PAGE = "https://ttu.blackboard.com/";
 	private static String LOGIN2_PAGE = "https://ttu.blackboard.com/webapps/bb-auth-provider-cas-BBLEARN/execute/casLogin?cmd=login&authProviderId=_103_1&redirectUrl=https%3A%2F%2Fttu.blackboard.com%2Fwebapps%2Fportal%2Fexecute%2FdefaultTab";
-	private static String STREAM = "https://ttu.blackboard.com/webapps/streamViewer/streamViewer";
+	private static String STREAM = "https://ttu.blackboard.com/webapps/portal/execute/tabs/tabAction";
 	private static String GRADE_PAGE = "https://ttu.blackboard.com/webapps/bb-mygrades-BBLEARN/myGrades?stream_name=mygrades";
 
 	private boolean isLoggedIn = false;
@@ -117,38 +117,45 @@ public class BlackboardAuth implements IAuth {
 	/**
 	 * Gets a list of courses displayed in black board.
 	 * 
-	 * @return A dictionary of course ids and course descriptions.
+	 * @return A dictionary of course ids and course names.
 	 * @throws IOException
 	 */
-	@SuppressWarnings("unchecked")
 	public HashMap<String, String> getCurrentClasses() {
-		String jsonraw = "";
+		String htmlraw = "";
 		Map<String, String> map = new HashMap<String, String>();
 		try {
 			// waits for the stream to be ready on the server side.
-			Utility.sleep(50);
+			Utility.sleep(10);
 			
 			HttpURLConnection conn = Utility.getPostConn(STREAM);
 			conn.setRequestProperty("Cookie", Cookie.chain(currCookies));
-			String query = "cmd=loadStream&streamName=mygrades&providers=%7B%7D&forOverview=false";
+			String query = "action=refreshAjaxModule&modId=_23_1&tabId=_2_1&tab_tab_group_id=_2_1";
 			conn.setRequestProperty("Content-Length", query.length() + "");
 			conn.setInstanceFollowRedirects(false);
 			DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
 			dos.writeBytes(query);
 			dos.close();
 
-			jsonraw = Utility.read(conn);
-			String json = jsonraw + "";
-			String s = "\"choices\"";
-			json = json.substring(json.indexOf(s) + s.length() + 1);
-			json = json.substring(0, json.indexOf("}") + 1);
-			Gson gson = new Gson();
-			map = (Map<String, String>) gson.fromJson(json, map.getClass());
+			htmlraw = Utility.read(conn);
+			htmlraw = Utility.safeRemove(htmlraw, "<?xml version=\"1.0\"?>");
+			htmlraw = Utility.safeRemove(htmlraw, "<![CDATA[");
+			htmlraw = "<html><body>" + htmlraw + "</body></html>";
+			Document doc = Jsoup.parse(htmlraw);
+			for (Element element : doc.select("a")) {
+				String url = element.attr("href");
+				int ind = url.indexOf("&id=");
+				url = url.substring(ind + 4);
+				ind = url.indexOf("&");
+				if (ind != -1) {
+					url = url.substring(0, ind);
+				}
+				map.put(url, element.text());
+			}
 		} catch (IOException t) {
 			TTUAuth.logError(t, "getcurrclasses", ErrorType.Fatal);
 		} catch (Throwable t) {
 			TTUAuth.logError(t, "getcurrclassesgeneral", ErrorType.APIChange,
-					jsonraw);
+					htmlraw);
 		}
 
 		return (HashMap<String, String>) map;

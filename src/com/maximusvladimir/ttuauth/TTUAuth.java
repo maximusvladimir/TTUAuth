@@ -59,6 +59,7 @@ public class TTUAuth implements IAuth {
 	private boolean isSSBLoggedIn = false;
 	private String raiderID = null;
 	private String name = null;
+	private boolean soonToExpire = false;
 
 	private long loginTime = 0;
 
@@ -362,6 +363,9 @@ public class TTUAuth implements IAuth {
 		}
 
 		isLoggedIn = true;
+		
+		if (soonToExpire)
+			return LoginResult.PASSWORD_EXPIRING;
 
 		return LoginResult.SUCCESS;
 	}
@@ -628,8 +632,15 @@ public class TTUAuth implements IAuth {
 		}
 
 		int follows = 0;
+		soonToExpire = false;
 		while (conn.getHeaderFields().containsKey("Location") && follows++ < 6) {
 			String location = conn.getHeaderFields().get("Location").get(0);
+			if (location.indexOf("password.asp?pwdStatus=") != -1) {
+				soonToExpire = true;
+				String nextUrl = location.substring(location.indexOf("redirect=") + "redirect=".length());
+				nextUrl = java.net.URLDecoder.decode(nextUrl, "UTF-8");
+				location = nextUrl;
+			}
 			HttpURLConnection conn2 = Utility.getGetConn(location);
 			conn2.setInstanceFollowRedirects(false);
 			String regCookie = Cookie.chain(cookie_sessionID);

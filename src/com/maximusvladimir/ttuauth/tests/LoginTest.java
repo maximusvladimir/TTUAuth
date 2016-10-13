@@ -29,11 +29,23 @@ public class LoginTest {
 		TTUAuth auth = getAuthFromFile();
 
 		start = System.currentTimeMillis();
-		auth.login();
+		System.out.println(auth.login().toString());
 		end = System.currentTimeMillis();
 
 		System.out.println("Login took: " + (end - start) + " ms.");
+		/*
+		start = System.currentTimeMillis();
+		HashMap<Integer, String> grades = auth.getFinalGradeList();
+		for (Integer i : grades.keySet()) {
+			System.out.println("ID: " + i);
+			System.out.println(auth.getFinalGrade(i));
+		}
+		System.out.println(auth.getSchedule());
+		end = System.currentTimeMillis();
 
+		System.out.println("FINAL GRADE + SCHEDULE GET took: " + (end - start)
+				+ " ms.");
+*/
 		/*start = System.currentTimeMillis();
 		RaiderFundAuth rfa = new RaiderFundAuth(auth);
 		rfa.login();
