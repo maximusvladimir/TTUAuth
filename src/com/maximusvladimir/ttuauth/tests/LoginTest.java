@@ -9,6 +9,8 @@ import com.maximusvladimir.ttuauth.TTUAuth;
 
 public class LoginTest {
 	public static final boolean USE_FIDDLER = true;
+	private static String keystoreloc = null;
+	private static String keystorepassword = null;
 
 	public static void main(String[] args) {
 		if (USE_FIDDLER) {
@@ -17,9 +19,9 @@ public class LoginTest {
 			sysProperties.put("https.proxyPort", "8888");
 			sysProperties.put("http.proxyHost", "127.0.0.1");
 			sysProperties.put("http.proxyPort", "8889");
-			System.setProperty("javax.net.ssl.trustStore",
-					"C:\\Program Files\\Java\\jdk1.8.0_25\\lib\\security\\FiddlerKeystore");
-			System.setProperty("javax.net.ssl.trustStorePassword", "123456");
+			getKeyStoreFromFile();
+			System.setProperty("javax.net.ssl.trustStore", keystoreloc);
+			System.setProperty("javax.net.ssl.trustStorePassword", keystorepassword);
 		}
 		
 		System.setProperty("https.protocols", "TLSv1.1,TLSv1.2,TLSv1");
@@ -53,8 +55,8 @@ public class LoginTest {
 		end = System.currentTimeMillis();
 
 		System.out.println("RFA GET took: " + (end - start) + " ms.");
-
-		start = System.currentTimeMillis();
+*/
+		/*start = System.currentTimeMillis();
 		HashMap<Integer, String> grades = auth.getFinalGradeList();
 		for (Integer i : grades.keySet()) {
 			System.out.println("ID: " + i);
@@ -64,8 +66,8 @@ public class LoginTest {
 		end = System.currentTimeMillis();
 
 		System.out.println("FINAL GRADE + SCHEDULE GET took: " + (end - start)
-				+ " ms.");
-*/
+				+ " ms.");*/
+/*
 		start = System.currentTimeMillis();
 		BlackboardAuth bb = new BlackboardAuth(auth);
 		bb.login();
@@ -76,7 +78,9 @@ public class LoginTest {
 		end = System.currentTimeMillis();
 
 		System.out.println("CLS GET took: " + (end - start) + " ms.");
-
+*/
+		System.out.println(auth.retrieveProfileImageURL());
+		
 		auth.logout();
 	}
 
@@ -108,5 +112,30 @@ public class LoginTest {
 
 		}
 		return null;
+	}
+	
+	private static void getKeyStoreFromFile() {
+		try {
+			String path = LoginTest.class.getResource("keystore.dat").toString();
+			if (path.indexOf("file:/") != -1)
+				path = path.replace("file:/", "");
+			java.io.FileInputStream fis = new java.io.FileInputStream(path);
+			java.io.BufferedReader br = new java.io.BufferedReader(
+					new java.io.InputStreamReader(fis));
+			String line = null;
+			while ((line = br.readLine()) != null) {
+				if (keystoreloc == null) {
+					keystoreloc = line;
+				} else {
+					keystorepassword = line;
+				}
+			}
+			br.close();
+		} catch (java.io.FileNotFoundException fnfe) {
+			System.err
+					.println("You did not add a key store location file to the folder (keystore.dat).");
+		} catch (Throwable t) {
+
+		}
 	}
 }

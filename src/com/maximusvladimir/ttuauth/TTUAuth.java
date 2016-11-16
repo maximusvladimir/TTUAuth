@@ -39,6 +39,7 @@ public class TTUAuth implements IAuth {
 	private static String FINAL_GRADE_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewTermGrde";
 	private static String FINAL_GRADE_POST_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewGrde";
 	private static String SCH_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskfshd.P_CrseSchd";
+	private static String GF_LOGIN_REQUEST = "https://ttumsc.gradesfirst.com/home/";
 	private static long MAX_LOGIN_TIME = 1000 * 60 * 20;
 
 	private Cookie cookie_aspSessionID;
@@ -54,6 +55,9 @@ public class TTUAuth implements IAuth {
 	private Cookie ssbCookie;
 	private Cookie elcCookie;
 	private Cookie esiCookie;
+	// Warning: only set when the profile image function is
+	// queried.
+	private Cookie phpCookie;
 
 	private boolean isLoggedIn = false;
 	private boolean isSSBLoggedIn = false;
@@ -165,6 +169,105 @@ public class TTUAuth implements IAuth {
 		}
 
 		return nodes;
+	}
+	
+	/**
+	 * Gets the URL for the profile image. This is the image on the student ID.
+	 * Notice this function is <b>sync</b>. Do NOT expect the value to be returned
+	 * immediately (or even quickly for that matter).
+	 * 
+	 * DANGER: May invalidate the blackboard session (if the blackboard session has
+	 * already been acquired)!
+	 * @return A url including the http or https portion or null.
+	 */
+	public String retrieveProfileImageURL() {
+		if (!isLoggedIn())
+			return null;
+		
+		String html = "";
+		
+		try {
+			HttpURLConnection conn = Utility.getGetConn(GF_LOGIN_REQUEST);
+			conn.setInstanceFollowRedirects(false);
+			Cookie gradeFirstSession = null;
+			ArrayList<Cookie> cookies = Cookie.getCookies(conn);
+			for (int i = 0; i < cookies.size(); i++) {
+				if (cookies.get(i).getKey().startsWith("_gradesfirst_sess")) {
+					gradeFirstSession = cookies.get(i);
+				}
+			}
+			if (gradeFirstSession == null) {
+				TTUAuth.logError(null, "profileimagegradefirstcookienull", ErrorType.Severe);
+				return null;
+			}
+			
+			//https://ttumsc.gradesfirst.com/session/new
+			String loc = Utility.getLocation(conn);
+			if (loc == null || loc.equals("")) {
+				TTUAuth.logError(null, "profileimagegradefirstlocation1null", ErrorType.Severe);
+				return null;
+			}
+			conn = Utility.getGetConn(loc);
+			conn.setRequestProperty("Cookie", Cookie.chain(gradeFirstSession));
+			conn.setInstanceFollowRedirects(false);
+			
+			// https://ttumsc.gradesfirst.com/cas/schools/163-texas_tech_university/session/new
+			loc = Utility.getLocation(conn);
+			if (loc == null || loc.equals("")) {
+				TTUAuth.logError(null, "profileimagegradefirstlocation2null", ErrorType.Severe);
+				return null;
+			}
+			conn = Utility.getGetConn(loc);
+			conn.setRequestProperty("Cookie", Cookie.chain(gradeFirstSession));
+			conn.setInstanceFollowRedirects(false);
+			
+			// https://webapps.itsd.ttu.edu/shim/gradesfirst/index.php/login?service=https%3A%2F%2Fttumsc.gradesfirst.com%2Fcas%2Fschools%2F163-texas_tech_university%2Fsession%2Fnew
+			int cycles = 0;
+			while (loc.indexOf("/home/") == -1 && cycles++ < 6) {
+				conn = Utility.getGetConn(loc);
+				conn.setRequestProperty("Cookie", Cookie.chain(elcCookie, new Cookie("ctest", "TRUE"), cookie_aspSessionID, esiCookie, phpCookie, gradeFirstSession));
+				conn.setInstanceFollowRedirects(false);
+				
+				loc = Utility.getLocation(conn);
+				ArrayList<Cookie> cookies2 = Cookie.getCookies(conn);
+				for (int i = 0; i < cookies2.size(); i++) {
+					if (cookies2.get(i).getKey().startsWith("PHPSESSI")) {
+						phpCookie = cookies2.get(i);
+					}
+				}
+			}
+			
+			if (loc.indexOf("/home/") != -1) {
+				loc = Utility.getLocation(conn);
+				if (loc == null || loc.equals("")) {
+					TTUAuth.logError(null, "profileimagegradefirstlocation9null", ErrorType.Severe);
+					return null;
+				}
+				conn = Utility.getGetConn(loc);
+				conn.setRequestProperty("Cookie", Cookie.chain(gradeFirstSession));
+				conn.setInstanceFollowRedirects(false);
+				html = Utility.read(conn);
+				Document doc = Jsoup.parse(html);
+				String url = null;
+				for (Element element : doc.select(".profile_picture")) {
+					for (Element el1 : element.children()) {
+						url = el1.attr("src");
+					}
+					if (url != null)
+						break;
+				}
+				return url;
+			} else {
+				// abnormal termination
+				TTUAuth.logError(null, "profileimageabnormalterm", ErrorType.Severe);
+			}
+		} catch (IOException t) {
+			TTUAuth.logError(t, "profileimage", ErrorType.Severe);
+		} catch (Throwable t) {
+			TTUAuth.logError(t, "profileimageother", ErrorType.Severe, html);
+		}
+		
+		return null;
 	}
 
 	/**
