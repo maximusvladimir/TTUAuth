@@ -40,6 +40,7 @@ public class TTUAuth implements IAuth {
 	private static String FINAL_GRADE_POST_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewGrde";
 	private static String SCH_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskfshd.P_CrseSchd";
 	private static String GF_LOGIN_REQUEST = "https://ttumsc.gradesfirst.com/home/";
+	private static String GF_COOKIE_PAGE = "https://ttumsc.gradesfirst.com/cas/schools/163-texas_tech_university/session/new";
 	private static long MAX_LOGIN_TIME = 1000 * 60 * 20;
 
 	private Cookie cookie_aspSessionID;
@@ -185,41 +186,15 @@ public class TTUAuth implements IAuth {
 			return null;
 		
 		String html = "";
+		Cookie gradeFirstSession = null;
 		
 		try {
-			HttpURLConnection conn = Utility.getGetConn(GF_LOGIN_REQUEST);
+			HttpURLConnection conn = Utility.getGetConn(GF_COOKIE_PAGE);
 			conn.setInstanceFollowRedirects(false);
-			Cookie gradeFirstSession = null;
-			ArrayList<Cookie> cookies = Cookie.getCookies(conn);
-			for (int i = 0; i < cookies.size(); i++) {
-				if (cookies.get(i).getKey().startsWith("_gradesfirst_sess")) {
-					gradeFirstSession = cookies.get(i);
-				}
-			}
-			if (gradeFirstSession == null) {
-				TTUAuth.logError(null, "profileimagegradefirstcookienull", ErrorType.Severe);
-				return null;
-			}
 			
-			//https://ttumsc.gradesfirst.com/session/new
+			// https://ttumsc.gradesfirst.com/session/new -> 
+			// https://webapps.itsd.ttu.edu/shim/gradesfirst/index.php/login?service=https%3A%2F%2Fttumsc.gradesfirst.com%2Fcas%2Fschools%2F163-texas_tech_university%2Fsession%2Fnew
 			String loc = Utility.getLocation(conn);
-			if (loc == null || loc.equals("")) {
-				TTUAuth.logError(null, "profileimagegradefirstlocation1null", ErrorType.Severe);
-				return null;
-			}
-			conn = Utility.getGetConn(loc);
-			conn.setRequestProperty("Cookie", Cookie.chain(gradeFirstSession));
-			conn.setInstanceFollowRedirects(false);
-			
-			// https://ttumsc.gradesfirst.com/cas/schools/163-texas_tech_university/session/new
-			loc = Utility.getLocation(conn);
-			if (loc == null || loc.equals("")) {
-				TTUAuth.logError(null, "profileimagegradefirstlocation2null", ErrorType.Severe);
-				return null;
-			}
-			conn = Utility.getGetConn(loc);
-			conn.setRequestProperty("Cookie", Cookie.chain(gradeFirstSession));
-			conn.setInstanceFollowRedirects(false);
 			
 			// https://webapps.itsd.ttu.edu/shim/gradesfirst/index.php/login?service=https%3A%2F%2Fttumsc.gradesfirst.com%2Fcas%2Fschools%2F163-texas_tech_university%2Fsession%2Fnew
 			int cycles = 0;
@@ -233,6 +208,9 @@ public class TTUAuth implements IAuth {
 				for (int i = 0; i < cookies2.size(); i++) {
 					if (cookies2.get(i).getKey().startsWith("PHPSESSI")) {
 						phpCookie = cookies2.get(i);
+					}
+					if (cookies2.get(i).getKey().startsWith("_gradesfirst_sess")) {
+						gradeFirstSession = cookies2.get(i);
 					}
 				}
 			}
@@ -608,6 +586,7 @@ public class TTUAuth implements IAuth {
 		}
 		
 		System.err.println("An error has occured"
+				+ (t != null ? " \"" + t.getCause() + "\". " : ". ")
 				+ (t != null ? " \"" + t.getMessage() + "\". " : ". ")
 				+ (localSource != null ? "Source: " + localSource + ". " : "")
 				+ (etype != ErrorType.None ? "Severity: " + etype.name() + ". "
