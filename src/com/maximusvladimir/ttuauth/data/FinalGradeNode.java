@@ -1,6 +1,9 @@
 package com.maximusvladimir.ttuauth.data;
 
-public class FinalGradeNode {
+import java.io.Serializable;
+
+public class FinalGradeNode implements Serializable {
+	private static final long serialVersionUID = 3043370717438006721L;
 	private String subject;
 	private String course;
 	private String courseTitle;

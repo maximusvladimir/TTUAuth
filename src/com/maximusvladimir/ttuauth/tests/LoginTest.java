@@ -5,6 +5,7 @@ import java.util.Properties;
 
 import com.maximusvladimir.ttuauth.BlackboardAuth;
 import com.maximusvladimir.ttuauth.RaiderFundAuth;
+import com.maximusvladimir.ttuauth.RateMyProfessor;
 import com.maximusvladimir.ttuauth.TTUAuth;
 
 public class LoginTest {
@@ -27,11 +28,19 @@ public class LoginTest {
 		System.setProperty("https.protocols", "TLSv1.1,TLSv1.2,TLSv1");
 
 		long start = 0, end = 0;
+		
+		if (1 < 2) {
+			RateMyProfessor rmp = new RateMyProfessor();
+			String pro = "Nakarmi, Upama";
+			System.out.println(pro + ": " + rmp.getTeacherRating(pro));
+			return;
+		}
 
 		TTUAuth auth = getAuthFromFile();
 
 		start = System.currentTimeMillis();
 		System.out.println(auth.login().toString());
+		System.out.println("Expires in: " + auth.getPasswordExpirationDays() + " days.");
 		end = System.currentTimeMillis();
 
 		System.out.println("Login took: " + (end - start) + " ms.");
@@ -56,17 +65,17 @@ public class LoginTest {
 
 		System.out.println("RFA GET took: " + (end - start) + " ms.");
 */
-		/*start = System.currentTimeMillis();
-		HashMap<Integer, String> grades = auth.getFinalGradeList();
+		start = System.currentTimeMillis();
+		/*HashMap<Integer, String> grades = auth.getFinalGradeList();
 		for (Integer i : grades.keySet()) {
 			System.out.println("ID: " + i);
 			System.out.println(auth.getFinalGrade(i));
-		}
-		System.out.println(auth.getSchedule());
+		}*/
+		//System.out.println(auth.getSchedule());
 		end = System.currentTimeMillis();
 
 		System.out.println("FINAL GRADE + SCHEDULE GET took: " + (end - start)
-				+ " ms.");*/
+				+ " ms.");
 /*
 		start = System.currentTimeMillis();
 		BlackboardAuth bb = new BlackboardAuth(auth);
@@ -79,7 +88,7 @@ public class LoginTest {
 
 		System.out.println("CLS GET took: " + (end - start) + " ms.");
 */
-		System.out.println(auth.retrieveProfileImageURL());
+		//System.out.println(auth.retrieveProfileImageURL());
 		
 		auth.logout();
 	}

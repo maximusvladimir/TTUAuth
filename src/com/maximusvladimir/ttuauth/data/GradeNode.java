@@ -1,8 +1,10 @@
 package com.maximusvladimir.ttuauth.data;
 
+import java.io.Serializable;
 import java.util.Date;
 
-public class GradeNode {
+public class GradeNode implements Serializable {
+	private static final long serialVersionUID = -4595482010310024496L;
 	private Date activityDate;
 	private String activityType;
 	private String assignment;

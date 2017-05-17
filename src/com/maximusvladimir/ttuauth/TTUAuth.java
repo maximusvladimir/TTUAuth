@@ -3,21 +3,32 @@ package com.maximusvladimir.ttuauth;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URLConnection;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.maximusvladimir.ttuauth.data.DayOfWeek;
 import com.maximusvladimir.ttuauth.data.FinalGradeNode;
 import com.maximusvladimir.ttuauth.data.LoginResult;
+import com.maximusvladimir.ttuauth.data.ScheduleKey;
 import com.maximusvladimir.ttuauth.data.ScheduleNode;
 import com.maximusvladimir.ttuauth.helpers.Cookie;
 import com.maximusvladimir.ttuauth.helpers.HTMLParser;
@@ -38,8 +49,8 @@ public class TTUAuth implements IAuth {
 	private static String LOGOUT_PAGE = "https://portal.texastech.edu/c/portal/logout";
 	private static String FINAL_GRADE_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewTermGrde";
 	private static String FINAL_GRADE_POST_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewGrde";
-	private static String SCH_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskfshd.P_CrseSchd";
-	private static String GF_LOGIN_REQUEST = "https://ttumsc.gradesfirst.com/home/";
+	private static String SCH_AUTH = "https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/security/validate-web-auth";
+	private static String SCH_PAGE = "https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/courses/fullview/";
 	private static String GF_COOKIE_PAGE = "https://ttumsc.gradesfirst.com/cas/schools/163-texas_tech_university/session/new";
 	private static long MAX_LOGIN_TIME = 1000 * 60 * 20;
 
@@ -66,6 +77,7 @@ public class TTUAuth implements IAuth {
 	private String name = null;
 	private boolean soonToExpire = false;
 	private boolean passwordExpired = false;
+	private int expireDays = -1;
 
 	private long loginTime = 0;
 
@@ -299,119 +311,166 @@ public class TTUAuth implements IAuth {
 		return map;
 	}
 
+	private Cookie doMobileLogin() throws IOException {
+		HttpURLConnection conn = Utility.getGetConn(SCH_AUTH);
+		conn.setInstanceFollowRedirects(false);
+		Cookie mobile = Cookie.getCookie(Cookie.getCookies(conn), "JSESSIONID");
+		String location = conn.getHeaderFields().get("Location").get(0);
+		int counter = 0;
+		HttpURLConnection getNext = null;
+		while (counter++ < 10) {
+			getNext = Utility.getGetConn(location);
+			getNext.setInstanceFollowRedirects(false);
+			getNext.setRequestProperty("Cookie", Cookie.chain(casCookie, cas2Cookie));
+			String header = Utility.getLocation(getNext);
+			if (header != null) {
+				location = header;
+				if (location.endsWith("ProdTTU-banner-mobileserver/")) {
+					break;
+				}
+			} else {
+				break;
+			}
+		}
+		if (getNext == null)
+			return null;
+		
+		mobile = Cookie.getCookie(Cookie.getCookies(getNext), "JSESSIONID");
+		
+		return mobile;
+	}
+	
 	/**
-	 * Gets a schedule for the current semester (fall/spring). Summer not
-	 * supported.
+	 * Gets a mapping of terms and the corresponding courses for
+	 * each term.
 	 * 
 	 * @throws IOException
 	 */
-	public ArrayList<ScheduleNode> getSchedule() {
-		ArrayList<ScheduleNode> nodes = new ArrayList<ScheduleNode>();
+	public Map<ScheduleKey, ArrayList<ScheduleNode>> getSchedule() {
+		Map<ScheduleKey, ArrayList<ScheduleNode>> nodes = new HashMap<ScheduleKey, ArrayList<ScheduleNode>>();
 		String html = "";
 		if (!isLoggedIn())
 			return nodes;
 		try {
-			// let's grab the latest date:
-			Calendar cal = Calendar.getInstance();
-			cal.setTime(new Date());
-			int month = cal.get(Calendar.MONTH);
-			String dt = "";
-			if (month >= 5) {
-				dt = "09/"
-						+ String.format("%02d", Utility.getFirstMonday(
-								cal.get(Calendar.YEAR), 8)) + "/"
-						+ cal.get(Calendar.YEAR);
-			} else {
-				dt = "02/"
-						+ String.format("%02d", Utility.getFirstMonday(
-								cal.get(Calendar.YEAR), 1)) + "/"
-						+ cal.get(Calendar.YEAR);
-			}
-
-			if (!isSSBLoggedIn) {
-				doSSBLogin();
-			}
-
-			if (ssbCookie == null) {
-				HttpURLConnection conn = Utility.getGetConn(SCH_PAGE);
-				conn.setRequestProperty("Cookie", Cookie.chain(idmCookie));
-				conn.setInstanceFollowRedirects(false);
-
-				ArrayList<Cookie> cookies = Cookie.getCookies(conn);
-				for (int i = 0; i < cookies.size(); i++) {
-					if (cookies.get(i).getKey().startsWith("SESSI")) {
-						ssbCookie = cookies.get(i);
-					}
-				}
-			}
-
-			HttpURLConnection conn = Utility.getGetConn(SCH_PAGE
-					+ "?start_date_in=" + dt);
-			conn.setRequestProperty("Cookie",
-					Cookie.chain(idmCookie, ssbCookie));
-			conn.setInstanceFollowRedirects(false);
-
-			html = Utility.read(conn);
+			Cookie mobileCookie = doMobileLogin();
 			
-			Document doc = Jsoup.parse(html);
-			HashMap<String, ArrayList<DayOfWeek>> entries = new HashMap<String, ArrayList<DayOfWeek>>();
-			for (Element element : doc.select(".datadisplaytable tr")) {
-				for (Element td : element.select(".ddlabel")) {
-					Element par = td.parent();
-					Elements childs = par.children();
-					Collections.reverse(childs);
-					int counter = 0;
-					for (Element el : childs) {
-						if (el.equals(td)) {
-							// this is a bit odd... basically the table is
-							// reversed,
-							// so we have to count backwards.
-							counter = 7 - (counter + 1);
-							break;
-						} else {
-							counter++;
-						}
-					}
-					if (td.nodeName().equals("td")) {
-						String data = td.child(0).html();
-						if (data.indexOf("<br>") != -1) {
-							DayOfWeek dow = DayOfWeek.fromInt(counter);
-							if (entries.containsKey(data)) {
-								entries.get(data).add(dow);
-							} else {
-								entries.put(data, new ArrayList<DayOfWeek>());
-								entries.get(data).add(dow);
+			
+			HttpURLConnection conn = Utility.getGetConn("https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/courses/overview/" + 
+			getRaiderID().toUpperCase());// + "&section=" + section.get("sectionId").getAsString());
+	    	conn.setInstanceFollowRedirects(false);
+	    	conn.setRequestProperty("Cookie", Cookie.chain(mobileCookie));
+	    	
+	    	html = Utility.read(conn);
+	    	
+	    	JsonElement jelement = new JsonParser().parse(html);
+		    JsonObject jobject = jelement.getAsJsonObject();
+		    JsonArray terms = jobject.getAsJsonArray("terms");
+			for (JsonElement termEl : terms) {
+				JsonObject term = termEl.getAsJsonObject();
+				ScheduleKey key = new ScheduleKey(term.get("name").getAsString(), term.get("startDate").getAsString(), term.get("endDate").getAsString());
+				key.setTermID(term.get("id").getAsString());
+				
+				ArrayList<ScheduleNode> sections = new ArrayList<ScheduleNode>();
+				for (JsonElement courseEl : term.get("sections").getAsJsonArray()) {
+					JsonObject section = courseEl.getAsJsonObject();
+					
+					String title = section.get("courseDescription").getAsString();
+					String course = section.get("courseName").getAsString();
+					String courseID = section.get("sectionId").getAsString();
+					double creditHours = 0.0;
+					if (section.has("credits") && !section.get("credits").isJsonNull())
+						creditHours = section.get("credits").getAsDouble();
+					
+					String instructorName = "";
+					for (JsonElement instructorEl : section.get("instructors").getAsJsonArray()) {
+						JsonObject instructor = instructorEl.getAsJsonObject();
+						if (instructor.has("primary")) {
+							if (instructor.get("primary").getAsBoolean()) {
+								instructorName = instructor.get("firstName").getAsString();
+								if (instructor.has("middleInitial") && !instructor.get("middleInitial").isJsonNull()) {
+									String middle = instructor.get("middleInitial").getAsString();
+									instructorName += " " + middle + (middle.length() == 1 ? "." : "");
+								}
+								instructorName += " " + instructor.get("lastName").getAsString();
+								break;
 							}
-						} else {
-							// report problem here.
 						}
 					}
+					
+					String room = "";
+					String location = "";
+					int startHour = 0, startMinute = 0, endHour = 0, endMinute = 0;
+					DayOfWeek[] dow = null;
+					
+					JsonArray meetings = section.get("meetingPatterns").getAsJsonArray();
+					if (meetings.size() > 0) {
+						JsonObject meeting = meetings.get(0).getAsJsonObject();
+						if (meeting.has("buildingId") && !meeting.get("buildingId").isJsonNull()) {
+							location = meeting.get("buildingId").getAsString();
+						}
+						if (meeting.has("room") && !meeting.get("room").isJsonNull()) {
+							room = meeting.get("room").getAsString();
+						}
+						if (meeting.has("sisStartTimeWTz") && !meeting.get("sisStartTimeWTz").isJsonNull()) {
+							String timeStart = meeting.get("sisStartTimeWTz").getAsString();
+							timeStart = timeStart.substring(0, timeStart.indexOf(" "));
+						    String hour = timeStart.substring(0, timeStart.indexOf(":"));
+						    String minute = timeStart.substring(timeStart.indexOf(":") + 1);
+						    try {
+						    	startHour = Integer.parseInt(hour);
+						    	startMinute = Integer.parseInt(minute);
+						    } catch (Throwable t) { }
+						}
+						if (meeting.has("sisEndTimeWTz") && !meeting.get("sisEndTimeWTz").isJsonNull()) {
+							String timeEnd = meeting.get("sisEndTimeWTz").getAsString();
+							timeEnd = timeEnd.substring(0, timeEnd.indexOf(" "));
+						    String hour = timeEnd.substring(0, timeEnd.indexOf(":"));
+						    String minute = timeEnd.substring(timeEnd.indexOf(":") + 1);
+						    try {
+						    	endHour = Integer.parseInt(hour);
+						    	endMinute = Integer.parseInt(minute);
+						    } catch (Throwable t) { }
+						}
+						if (meeting.has("daysOfWeek") && !meeting.get("daysOfWeek").isJsonNull()) {
+							JsonArray meetingDays = meeting.get("daysOfWeek").getAsJsonArray();
+							dow = new DayOfWeek[meetingDays.size()];
+							int iter = 0;
+							for (JsonElement meetingDayEl : meetingDays) {
+								dow[iter++] = DayOfWeek.fromInt(meetingDayEl.getAsInt());
+							}
+						}
+					}
+					
+					ScheduleNode node = new ScheduleNode();
+					node.setCourse(course);
+					node.setCourseID(courseID);
+					node.setCourseTitle(title);
+					node.setCreditHours(creditHours);
+					node.setInstructor(instructorName);
+					node.setLocation(location);
+					node.setStartHour(startHour);
+					node.setStartMin(startMinute);
+					node.setEndHour(endHour);
+					node.setEndMin(endMinute);
+					node.setDaysOfWeek(dow);
+					node.setRoomNumber(room);
+					
+					sections.add(node);
 				}
+				nodes.put(key, sections);
 			}
-
-			for (String entry : entries.keySet()) {
-				ScheduleNode n = new ScheduleNode();
-				String[] splits = entry.split("<br>");
-				String courseName = splits[0];
-				String time = splits[2];
-				String location = splits[3];
-				n.setCourse(courseName);
-				Object[] dowso = entries.get(entry).toArray();
-				DayOfWeek[] dows = new DayOfWeek[dowso.length];
-				for (int i = 0; i < dowso.length; i++) {
-					dows[i] = (DayOfWeek) dowso[i];
+			
+			// sort the terms.
+			Comparator<ScheduleKey> comparator = new Comparator<ScheduleKey>() {
+				@Override
+				public int compare(ScheduleKey arg0, ScheduleKey arg1) {
+					return arg0.getTermID().compareTo(arg1.getTermID());
 				}
-				int[] times = Utility.convertToTime(time);
-				if (times != null) {
-					n.setStartHour(times[0]);
-					n.setStartMin(times[1]);
-					n.setEndHour(times[2]);
-					n.setEndMin(times[3]);
-				}
-				n.setDaysOfWeek(dows);
-				n.setLocation(location);
-				nodes.add(n);
-			}
+			};
+			
+			TreeMap<ScheduleKey, ArrayList<ScheduleNode>> tmp = new TreeMap<ScheduleKey, ArrayList<ScheduleNode>>(comparator);
+			tmp.putAll(nodes);
+			nodes = tmp;
 		} catch (IOException t) {
 			TTUAuth.logError(t, "getsch", ErrorType.Fatal);
 		} catch (Throwable t) {
@@ -477,6 +536,14 @@ public class TTUAuth implements IAuth {
 	 */
 	public String getRaiderID() {
 		return raiderID;
+	}
+	
+	/**
+	 * Gets the number of days before the user's password expires.
+	 * @return -1 if the password has already expired or if it doesn't expire soon.
+	 */
+	public int getPasswordExpirationDays() {
+		return expireDays;
 	}
 
 	/**
@@ -689,6 +756,8 @@ public class TTUAuth implements IAuth {
 
 	private boolean postLogin(String username, String password)
 			throws IOException {
+		expireDays = -1;
+		
 		HttpURLConnection conn = Utility.getPostConn(LOGIN_PAGE);
 		conn.setRequestProperty("Cookie",
 				Cookie.chain(new Cookie("ctest", "TRUE"), cookie_aspSessionID));
@@ -731,6 +800,15 @@ public class TTUAuth implements IAuth {
 			}
 			else if (location.indexOf("password.asp?pwdStatus=") != -1) {
 				soonToExpire = true;
+				String holder = "pwdStatus=";
+			    String pval = location.substring(location.indexOf(holder) + holder.length());
+			    if (pval.indexOf("&") != -1) {
+			      pval = pval.substring(0, pval.indexOf("&"));
+			    }
+			    try {
+			    	expireDays = Integer.parseInt(pval);
+			    } catch (Throwable t) { }
+				
 				String nextUrl = location.substring(location.indexOf("redirect=") + "redirect=".length());
 				nextUrl = java.net.URLDecoder.decode(nextUrl, "UTF-8");
 				location = nextUrl;

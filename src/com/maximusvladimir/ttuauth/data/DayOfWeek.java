@@ -1,6 +1,8 @@
 package com.maximusvladimir.ttuauth.data;
 
-public enum DayOfWeek {
+import java.io.Serializable;
+
+public enum DayOfWeek implements Serializable {
 	Mon,
 	Tue,
 	Wed,
@@ -12,19 +14,19 @@ public enum DayOfWeek {
 	
 	public static DayOfWeek fromInt(int val) {
 		switch (val) {
-		case 0:
-			return Mon;
-		case 1:
-			return Tue;
 		case 2:
-			return Wed;
+			return Mon;
 		case 3:
-			return Thu;
+			return Tue;
 		case 4:
-			return Fri;
+			return Wed;
 		case 5:
-			return Sat;
+			return Thu;
 		case 6:
+			return Fri;
+		case 7:
+			return Sat;
+		case 1:
 			return Sun;
 		}
 		return Unk;

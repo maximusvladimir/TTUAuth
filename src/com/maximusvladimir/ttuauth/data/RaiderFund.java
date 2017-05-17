@@ -1,6 +1,9 @@
 package com.maximusvladimir.ttuauth.data;
 
-public class RaiderFund {
+import java.io.Serializable;
+
+public class RaiderFund implements Serializable {
+	private static final long serialVersionUID = 1271621828323020642L;
 	private String accountName;
 	private String amount;
 	
