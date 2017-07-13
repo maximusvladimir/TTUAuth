@@ -3,12 +3,11 @@ package com.maximusvladimir.ttuauth.data;
 import java.io.Serializable;
 
 public class FinalGradeNode implements Serializable {
-	private static final long serialVersionUID = 3043370717438006721L;
-	private String subject;
+	private static final long serialVersionUID = 3043370717438001721L;
+	private String section;
 	private String course;
 	private String courseTitle;
 	private String crn;
-	private String campus;
 	private String grade;
 	private String hours;
 	
@@ -17,11 +16,11 @@ public class FinalGradeNode implements Serializable {
 	}
 
 	public String getSubject() {
-		return subject;
+		return section;
 	}
 
 	public void setSubject(String subject) {
-		this.subject = subject;
+		this.section = subject;
 	}
 
 	public String getCourse() {
@@ -48,14 +47,6 @@ public class FinalGradeNode implements Serializable {
 		this.crn = crn;
 	}
 
-	public String getCampus() {
-		return campus;
-	}
-
-	public void setCampus(String campus) {
-		this.campus = campus;
-	}
-
 	public String getHours() {
 		return hours;
 	}
@@ -74,7 +65,7 @@ public class FinalGradeNode implements Serializable {
 	
 	public String toString() {
 		return "{\"Subject\": \"" + getSubject() + "\", \"Course\": \"" + getCourse() + "\", \"CourseTitle\": \"" + getCourseTitle() + 
-				"\", \"CRN\": \"" + getCrn() + "\", \"Campus\": \"" + getCampus() + "\", \"Grade\": \"" + getGrade() + "\", \"CreditHours\": \"" + 
+				"\", \"CRN\": \"" + getCrn() + "\", \"Grade\": \"" + getGrade() + "\", \"CreditHours\": \"" + 
 				getHours() + "\"}";
 	}
 }

@@ -1,10 +1,13 @@
 package com.maximusvladimir.ttuauth.helpers;
 
 import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +16,24 @@ import com.maximusvladimir.ttuauth.AuthSettings;
 
 public class Utility {
 	private static String ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+	
+	public static void writeQuery(HttpURLConnection conn, KeyValue... keyValues) throws IOException {
+		String query = "";
+		for (int i = 0; i < keyValues.length; i++) {
+			KeyValue kv = keyValues[i];
+			try {
+				query += kv.key + "=" + URLEncoder.encode(kv.value, "UTF-8") + "&";
+			} catch (UnsupportedEncodingException e) {
+			}
+		}
+		if (query.endsWith("&")) {
+			query = query.substring(0, query.length() - 1);
+		}
+		conn.setRequestProperty("Content-Length", query.length() + "");
+		DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
+		dos.writeBytes(query);
+		dos.close();
+	}
 	
 	public static HttpURLConnection getGetConn(String url) throws IOException {
 		URL u = new URL(url);

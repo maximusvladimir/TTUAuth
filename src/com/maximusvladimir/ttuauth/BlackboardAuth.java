@@ -180,7 +180,7 @@ public class BlackboardAuth implements IAuth {
 			return LoginResult.MAIN_LOGOUT;
 
 		try {
-			Cookie[] loginCookies = auth.getSharedLoginCookies();
+			Cookie[] loginCookies = auth.getERaiderCookies();
 			Cookie[] newArray = new Cookie[loginCookies.length + 1];
 			System.arraycopy(loginCookies, 0, newArray, 0, loginCookies.length);
 			loginCookies = newArray;

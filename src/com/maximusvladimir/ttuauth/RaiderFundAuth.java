@@ -138,7 +138,7 @@ public class RaiderFundAuth implements IAuth {
 			conn = Utility.getGetConn(FUND_LOGIN);
 			conn.setInstanceFollowRedirects(false);
 			conn.setRequestProperty("Cookie",
-					Cookie.chain(auth.getSharedLoginCookies()));
+					Cookie.chain(auth.getERaiderCookies()));
 			cookies = Cookie.getCookies(conn);
 			Cookie php2 = null;
 			for (int i = 0; i < cookies.size(); i++) {
@@ -151,7 +151,7 @@ public class RaiderFundAuth implements IAuth {
 				TTUAuth.logError(new IOException("Cookie value: " + php2),
 						"raiderfundlogincookie", ErrorType.APIChange);
 
-			Cookie[] cs = auth.getSharedLoginCookies();
+			Cookie[] cs = auth.getERaiderCookies();
 			ArrayList<Cookie> cs2 = new ArrayList<Cookie>();
 			for (int i = 0; i < cs.length; i++) {
 				cs2.add(cs[i]);

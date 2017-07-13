@@ -51,8 +51,12 @@ public class Cookie {
 		
 		String cookie = "";
 		for (int i = 0; i < args.length; i++) {
-			if (args[i] == null)
+			if (args[i] == null) {
+				System.out.println("Danger! Cookie at index " + i + " is null.");
+				Thread.dumpStack();
 				continue;
+				//throw new NullPointerException("Error: Cookie at index " + i + " is null.");
+			}
 			
 			cookie += args[i].getKey() + "=" + args[i].getValue();
 			if (i != args.length - 1)
@@ -94,6 +98,19 @@ public class Cookie {
 		
 		for (int i = 0; i < cookies.size(); i++) {
 			if (cookies.get(i).getKey().equals(key)) {
+				return cookies.get(i);
+			}
+		}
+		return null;
+	}
+	
+	public static Cookie getCookieStartsWith(ArrayList<Cookie> cookies, String startsWith) {
+		if (cookies == null)
+			return null;
+		
+		for (int i = 0; i < cookies.size(); i++) {
+			//System.out.println(cookies.get(i).getKey() + " " + startsWith);
+			if (cookies.get(i).getKey().startsWith(startsWith)) {
 				return cookies.get(i);
 			}
 		}

@@ -1,5 +1,6 @@
 package com.maximusvladimir.ttuauth.tests;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Properties;
 
@@ -7,9 +8,11 @@ import com.maximusvladimir.ttuauth.BlackboardAuth;
 import com.maximusvladimir.ttuauth.RaiderFundAuth;
 import com.maximusvladimir.ttuauth.RateMyProfessor;
 import com.maximusvladimir.ttuauth.TTUAuth;
+import com.maximusvladimir.ttuauth.data.ScheduleKey;
+import com.maximusvladimir.ttuauth.data.ScheduleNode;
 
 public class LoginTest {
-	public static final boolean USE_FIDDLER = true;
+	public static final boolean USE_FIDDLER = false;//true;
 	private static String keystoreloc = null;
 	private static String keystorepassword = null;
 
@@ -29,34 +32,30 @@ public class LoginTest {
 
 		long start = 0, end = 0;
 		
-		if (1 < 2) {
+		/*if (1 < 2) {
+			start = System.currentTimeMillis();
 			RateMyProfessor rmp = new RateMyProfessor();
 			String pro = "Nakarmi, Upama";
-			System.out.println(pro + ": " + rmp.getTeacherRating(pro));
+			System.out.println(pro + ": " + rmp.getTeacherRating(pro) + " time: " + (System.currentTimeMillis() - start) + " ms.");
 			return;
-		}
+		}*/
 
 		TTUAuth auth = getAuthFromFile();
 
 		start = System.currentTimeMillis();
 		System.out.println(auth.login().toString());
-		System.out.println("Expires in: " + auth.getPasswordExpirationDays() + " days.");
+		//System.out.println("Expires in: " + auth.getPasswordExpirationDays() + " days.");
 		end = System.currentTimeMillis();
 
 		System.out.println("Login took: " + (end - start) + " ms.");
-		/*
+		
 		start = System.currentTimeMillis();
-		HashMap<Integer, String> grades = auth.getFinalGradeList();
-		for (Integer i : grades.keySet()) {
-			System.out.println("ID: " + i);
-			System.out.println(auth.getFinalGrade(i));
-		}
-		System.out.println(auth.getSchedule());
+		System.out.println(auth.retrieveProfileImageURL());
 		end = System.currentTimeMillis();
 
-		System.out.println("FINAL GRADE + SCHEDULE GET took: " + (end - start)
+		System.out.println("Profile Image: " + (end - start)
 				+ " ms.");
-*/
+
 		/*start = System.currentTimeMillis();
 		RaiderFundAuth rfa = new RaiderFundAuth(auth);
 		rfa.login();
@@ -66,16 +65,24 @@ public class LoginTest {
 		System.out.println("RFA GET took: " + (end - start) + " ms.");
 */
 		start = System.currentTimeMillis();
-		/*HashMap<Integer, String> grades = auth.getFinalGradeList();
-		for (Integer i : grades.keySet()) {
-			System.out.println("ID: " + i);
-			System.out.println(auth.getFinalGrade(i));
-		}*/
-		//System.out.println(auth.getSchedule());
+		auth.getFinalGrades();
 		end = System.currentTimeMillis();
 
-		System.out.println("FINAL GRADE + SCHEDULE GET took: " + (end - start)
-				+ " ms.");
+		System.out.println("Final Grades: " + (end - start) + " ms.");
+		
+		
+		
+		start = System.currentTimeMillis();
+		HashMap<ScheduleKey, ArrayList<ScheduleNode>> m = auth.getSchedule();
+		for (ScheduleKey k : m.keySet()) {
+			System.out.println(k.getTermID() + ": ");
+			for (ScheduleNode node : m.get(k)) {
+				System.out.println("\t" + node.getCourse());
+			}
+		}
+		end = System.currentTimeMillis();
+
+		System.out.println("Schedule: " + (end - start) + " ms.");
 /*
 		start = System.currentTimeMillis();
 		BlackboardAuth bb = new BlackboardAuth(auth);
