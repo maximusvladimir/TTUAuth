@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URLConnection;
 import java.net.URLEncoder;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -216,7 +217,13 @@ public class TTUAuth implements IAuth {
 		return null;
 	}
 
-	public Object getFinalGrades() {
+	/**
+	 * Gets all final grades.
+	 * @return An ArrayList containing term information, which in turn contains section data,
+	 * or an empty ArrayList if an exception occured.
+	 */
+	public ArrayList<FinalGradeTerm> getFinalGrades() {
+		ArrayList<FinalGradeTerm> fgtarray = new ArrayList<FinalGradeTerm>();
 		String html = "";
 		if (!isLoggedIn())
 			return null;
@@ -236,37 +243,63 @@ public class TTUAuth implements IAuth {
 		    JsonArray terms = jobject.getAsJsonArray("terms");
 			for (JsonElement termEl : terms) {
 				JsonObject term = termEl.getAsJsonObject();
-				/*"id": "201527",
-      "name": "Fall 2014 TTU",
-      "startDate": "2014-08-11",
-      "endDate": "2014-12-10",
-      "sections": [*/
-				//ScheduleKey key = new ScheduleKey(term.get("name").getAsString(), term.get("startDate").getAsString(), term.get("endDate").getAsString());
-				//key.setTermID(term.get("id").getAsString());
 				FinalGradeTerm fgt = new FinalGradeTerm();
 				fgt.EndDate = term.get("endDate").getAsString();
 				fgt.ID = term.get("id").getAsString();
 				fgt.Name = term.get("name").getAsString();
 				fgt.StartDate = term.get("startDate").getAsString();
-				System.out.println(fgt);
 				
 				ArrayList<FinalGradeNode> sections = new ArrayList<FinalGradeNode>();
 				for (JsonElement courseEl : term.get("sections").getAsJsonArray()) {
 					JsonObject section = courseEl.getAsJsonObject();
 					
-					/*String title = section.get("courseTitle").getAsString();
-					String course = section.get("courseName").getAsString();
-					String courseID = section.get("sectionId").getAsString();*/
+					String sectionId = section.get("sectionId").getAsString(); // XXXXX
+					String sectionTitle = section.get("sectionTitle").getAsString(); // Independent Study Course
+					String courseName = section.get("courseName").getAsString(); // COL XXXX
+					String creditHours = section.get("creditHours").getAsString(); // 3
+					String courseSectionNumber = section.get("courseSectionNumber").getAsString(); // 001
+					String updated = null;
+					String value = null;
+					for (JsonElement gradeEl : section.get("grades").getAsJsonArray()) {
+						JsonObject grade = gradeEl.getAsJsonObject();
+						String type = grade.get("type").getAsString().toLowerCase();
+						if (type.equals("final")) {
+							updated = grade.get("updated").getAsString();
+							value = grade.get("value").getAsString();
+							break;
+						}
+					}
+					
+					FinalGradeNode fgn = new FinalGradeNode();
+					fgn.setCourse(courseName);
+					fgn.setCourseTitle(sectionTitle);
+					fgn.setCrn(sectionId);
+					fgn.setGrade(value);
+					fgn.setHours(creditHours);
+					fgn.setSection(courseSectionNumber);
+					
+					Date d = null;
+					if (updated != null) {
+						d = Utility.parseUTCDate(updated);
+						if (d == null) {
+							TTUAuth.logError(null, "fg", ErrorType.APIChange, "Unable to parse date: \"" + updated + "\".");
+						}
+					}
+					
+					fgn.setUpdatedDate(d);
+					sections.add(fgn);
 				}
+				
+				fgt.nodes = sections;
+				fgtarray.add(fgt);
 			}
 		} catch (IOException t) {
 			TTUAuth.logError(t, "getfgnew", ErrorType.Fatal);
-		}
-		/*} catch (Throwable t) {
+		} catch (Throwable t) {
 			TTUAuth.logError(t, "getfgnewgeneral", ErrorType.APIChange, html);
-		}*/
+		}
 
-		return null;
+		return fgtarray;
 	}
 	
 	/***
@@ -313,6 +346,23 @@ public class TTUAuth implements IAuth {
 	*/
 	public Cookie[] getERaiderCookies() {
 		return new Cookie[] { cookieFedAuth, cookieFedAuth1, cookieESI, cookieELC, cookieASPNET_SESSIONID, casERaider };
+	}
+	
+	/**
+	 * Gets the cookie for use on webapps.itsd.ttu.edu. Note: Only use once
+	 * login() completes successfully.
+	 * @return
+	 */
+	public Cookie getELCCookie() {
+		return cookieELC;
+	}
+	
+	public Cookie getPHPCookie() {
+		return phpCookie;
+	}
+	
+	public void setPHPCookie(Cookie cookie) {
+		phpCookie = cookie;
 	}
 	
 	/**

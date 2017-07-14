@@ -1,8 +1,14 @@
 package com.maximusvladimir.ttuauth.tests;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Properties;
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.parser.Parser;
 
 import com.maximusvladimir.ttuauth.BlackboardAuth;
 import com.maximusvladimir.ttuauth.RaiderFundAuth;
@@ -10,9 +16,10 @@ import com.maximusvladimir.ttuauth.RateMyProfessor;
 import com.maximusvladimir.ttuauth.TTUAuth;
 import com.maximusvladimir.ttuauth.data.ScheduleKey;
 import com.maximusvladimir.ttuauth.data.ScheduleNode;
+import com.maximusvladimir.ttuauth.helpers.Utility;
 
 public class LoginTest {
-	public static final boolean USE_FIDDLER = false;//true;
+	public static final boolean USE_FIDDLER = true;
 	private static String keystoreloc = null;
 	private static String keystorepassword = null;
 
@@ -29,50 +36,53 @@ public class LoginTest {
 		}
 		
 		System.setProperty("https.protocols", "TLSv1.1,TLSv1.2,TLSv1");
-
 		long start = 0, end = 0;
 		
-		/*if (1 < 2) {
-			start = System.currentTimeMillis();
-			RateMyProfessor rmp = new RateMyProfessor();
-			String pro = "Nakarmi, Upama";
-			System.out.println(pro + ": " + rmp.getTeacherRating(pro) + " time: " + (System.currentTimeMillis() - start) + " ms.");
-			return;
-		}*/
+		
+		
+		// Rate My Professor:
+		/*start = System.currentTimeMillis();
+		RateMyProfessor rmp = new RateMyProfessor();
+		String pro = "Nakarmi, Upama";
+		System.out.println(pro + ": " + rmp.getTeacherRating(pro) + " time: " + (System.currentTimeMillis() - start) + " ms.");*/
 
+		
 		TTUAuth auth = getAuthFromFile();
 
+		
+		// Core Login:
 		start = System.currentTimeMillis();
-		System.out.println(auth.login().toString());
-		//System.out.println("Expires in: " + auth.getPasswordExpirationDays() + " days.");
+		System.out.println("eRaider Login: " + auth.login().toString());
+		System.out.println("Expires in: " + auth.getPasswordExpirationDays() + " days.");
 		end = System.currentTimeMillis();
-
 		System.out.println("Login took: " + (end - start) + " ms.");
 		
-		start = System.currentTimeMillis();
+		
+		// Profile Image:
+		/*start = System.currentTimeMillis();
 		System.out.println(auth.retrieveProfileImageURL());
 		end = System.currentTimeMillis();
+		System.out.println("Profile Image: " + (end - start) + " ms.");*/
 
-		System.out.println("Profile Image: " + (end - start)
-				+ " ms.");
-
+		
+		// Raider Fund:
 		/*start = System.currentTimeMillis();
 		RaiderFundAuth rfa = new RaiderFundAuth(auth);
-		rfa.login();
+		System.out.println("RFA Login: " + rfa.login().toString());
 		System.out.println(rfa.getRaiderFunds());
 		end = System.currentTimeMillis();
+		System.out.println("RFA GET took: " + (end - start) + " ms.");*/
 
-		System.out.println("RFA GET took: " + (end - start) + " ms.");
-*/
-		start = System.currentTimeMillis();
+		
+		// Final Grades:
+		/*start = System.currentTimeMillis();
 		auth.getFinalGrades();
 		end = System.currentTimeMillis();
-
-		System.out.println("Final Grades: " + (end - start) + " ms.");
+		System.out.println("Final Grades: " + (end - start) + " ms.");*/
 		
 		
-		
-		start = System.currentTimeMillis();
+		// Schedule:
+		/*start = System.currentTimeMillis();
 		HashMap<ScheduleKey, ArrayList<ScheduleNode>> m = auth.getSchedule();
 		for (ScheduleKey k : m.keySet()) {
 			System.out.println(k.getTermID() + ": ");
@@ -81,9 +91,10 @@ public class LoginTest {
 			}
 		}
 		end = System.currentTimeMillis();
-
-		System.out.println("Schedule: " + (end - start) + " ms.");
-/*
+		System.out.println("Schedule: " + (end - start) + " ms.");*/
+		
+		
+		// Blackboard:
 		start = System.currentTimeMillis();
 		BlackboardAuth bb = new BlackboardAuth(auth);
 		bb.login();
@@ -92,10 +103,7 @@ public class LoginTest {
 			System.out.println(bb.getClassGrades(classID));
 		}
 		end = System.currentTimeMillis();
-
-		System.out.println("CLS GET took: " + (end - start) + " ms.");
-*/
-		//System.out.println(auth.retrieveProfileImageURL());
+		System.out.println("Blackboard took: " + (end - start) + " ms.");
 		
 		auth.logout();
 	}

@@ -8,11 +8,15 @@ import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
 import com.maximusvladimir.ttuauth.AuthSettings;
+import com.maximusvladimir.ttuauth.ErrorType;
+import com.maximusvladimir.ttuauth.TTUAuth;
 
 public class Utility {
 	private static String ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
@@ -87,6 +91,26 @@ public class Utility {
 		long start = System.currentTimeMillis();
 		while (System.currentTimeMillis() - start < time) {
 			Thread.yield();
+		}
+	}
+	
+	/**
+	 * Parses a date in the format:
+	 * 2017-07-13T22:48:18-0500
+	 * or
+	 * 2016-09-06T09:48:16-0500Z
+	 * @param str The string to parse. Must NOT be null!!!
+	 * @return Returns null on failure.
+	 */
+	public static Date parseUTCDate(String str) {
+		if (str.endsWith("Z")) {
+			str = str.substring(0, str.length() - 1);
+		}
+		try {
+			SimpleDateFormat parser = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+	        return parser.parse(str);
+		} catch (Throwable t) {
+			return null;
 		}
 	}
 	

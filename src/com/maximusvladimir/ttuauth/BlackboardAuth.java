@@ -13,6 +13,7 @@ import java.util.Map;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.parser.Parser;
 import org.jsoup.select.Elements;
 
 import com.maximusvladimir.ttuauth.data.GradeNode;
@@ -25,12 +26,12 @@ import com.maximusvladimir.ttuauth.helpers.Utility;
  */
 public class BlackboardAuth implements IAuth {
 	private static String LOGIN_PAGE = "https://ttu.blackboard.com/";
-	private static String LOGIN2_PAGE = "https://ttu.blackboard.com/webapps/bb-auth-provider-cas-BBLEARN/execute/casLogin?cmd=login&authProviderId=_103_1&redirectUrl=https%3A%2F%2Fttu.blackboard.com%2Fwebapps%2Fportal%2Fexecute%2FdefaultTab";
-	private static String STREAM = "https://ttu.blackboard.com/webapps/portal/execute/tabs/tabAction";
+	private static String LOGIN2_PAGE = "https://webapps.itsd.ttu.edu/shim/bblearn9/index.php/login?service=https%3A%2F%2Fttu.blackboard.com%2Fwebapps%2Fbb-auth-provider-cas-BBLEARN%2Fexecute%2FcasLogin%3Fcmd%3Dlogin%26authProviderId%3D_103_1%26redirectUrl%3Dhttps%253A%252F%252Fttu.blackboard.com%252Fwebapps%252Fportal%252Fexecute%252FdefaultTab%26globalLogoutEnabled%3Dtrue&renew=true";
+	private static String STREAM = "https://ttu.blackboard.com/webapps/Bb-mobile-BBLEARN/enrollments?course_type=ALL&include_grades=false&language=en_US&v=1&ver=4.1.4";
 	private static String GRADE_PAGE = "https://ttu.blackboard.com/webapps/bb-mygrades-BBLEARN/myGrades?stream_name=mygrades";
 
 	private boolean isLoggedIn = false;
-	private ArrayList<Cookie> currCookies;
+	private Cookie jSessionID, sessionID, sSessionID, webClientCache, otherCookie;
 
 	private TTUAuth auth;
 
@@ -55,60 +56,14 @@ public class BlackboardAuth implements IAuth {
 	public ArrayList<GradeNode> getClassGrades(String classID) {
 		String html = "";
 		ArrayList<GradeNode> gns = new ArrayList<GradeNode>();
-		try {
-			HttpURLConnection conn = Utility.getGetConn(GRADE_PAGE
-					+ "&course_id=" + classID);
-			conn.setRequestProperty("Cookie", Cookie.chain(currCookies));
-
-			html = Utility.read(conn);
-			Document doc = Jsoup.parse(html);
-			for (Element element : doc.select(".sortable_item_row")) {
-				String assignment = element.select(".gradable").text();
-				String actDate = element.select(".lastActivityDate").text();
-				String act = element.select(".activityType").text();
-				String grade = element.select(".cell .grade").text()
-						+ element.select(".pointsPossible").text();
-				String comments = null;
-				Elements els = element.select(".grade-feedback");
-				if (els.size() == 1) {
-					try {
-						Element cel = els.first();
-						String val = cel.attr("onClick");
-						String id = cel.attr("id");
-						val = val
-								.replace("mygrades.showInLightBox( '", "")
-								.replace(
-										"', '<div class=\\\"vtbegenerated\\\">",
-										"").replace("</div>', '", "")
-								.replace("' );", "").replace(id, "");
-						comments = val;
-					} catch (Throwable t) {
-
-					}
-				}
-
-				Date dt = null;
-				SimpleDateFormat parserSDF = new SimpleDateFormat(
-						"MMM dd, yyyy HH:mm aa");
-				try {
-					dt = parserSDF.parse(actDate);
-				} catch (ParseException e) {
-				}
-
-				GradeNode gn = new GradeNode();
-				gn.setActivityDate(dt);
-				gn.setActivityType(act);
-				gn.setAssignment(assignment);
-				gn.setComments(comments);
-				gn.setGrade(grade);
-				gns.add(gn);
-			}
+		/*try {
+			
 		} catch (IOException t) {
 			TTUAuth.logError(t, "getclassgrades", ErrorType.Fatal);
 		} catch (Throwable t) {
 			TTUAuth.logError(t, "getclassgradesgeneral", ErrorType.APIChange,
 					html);
-		}
+		}*/
 
 		return gns;
 	}
@@ -120,41 +75,31 @@ public class BlackboardAuth implements IAuth {
 	 * @throws IOException
 	 */
 	public HashMap<String, String> getCurrentClasses() {
-		String htmlraw = "";
+		String xml = "";
 		Map<String, String> map = new HashMap<String, String>();
 		try {
-			// waits for the stream to be ready on the server side.
-			Utility.sleep(10);
+			HttpURLConnection conn = Utility.getGetConn(STREAM);
+			Cookie.setCookies(conn, jSessionID, sessionID, sSessionID, webClientCache, otherCookie);
+			xml = Utility.read(conn);
 			
-			HttpURLConnection conn = Utility.getPostConn(STREAM);
-			conn.setRequestProperty("Cookie", Cookie.chain(currCookies));
-			String query = "action=refreshAjaxModule&modId=_23_1&tabId=_2_1&tab_tab_group_id=_2_1";
-			conn.setRequestProperty("Content-Length", query.length() + "");
-			conn.setInstanceFollowRedirects(false);
-			DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
-			dos.writeBytes(query);
-			dos.close();
-
-			htmlraw = Utility.read(conn);
-			htmlraw = Utility.safeRemove(htmlraw, "<?xml version=\"1.0\"?>");
-			htmlraw = Utility.safeRemove(htmlraw, "<![CDATA[");
-			htmlraw = "<html><body>" + htmlraw + "</body></html>";
-			Document doc = Jsoup.parse(htmlraw);
-			for (Element element : doc.select("a")) {
-				String url = element.attr("href");
-				int ind = url.indexOf("&id=");
-				url = url.substring(ind + 4);
-				ind = url.indexOf("&");
-				if (ind != -1) {
-					url = url.substring(0, ind);
-				}
-				map.put(url, element.text());
+			Document doc = Jsoup.parse(xml, "", Parser.xmlParser());
+			for (Element e : doc.select("course")) {
+				String blackboardID = e.attr("bbid");
+				String courseID = e.attr("courseid");
+				Date enrollDate = Utility.parseUTCDate(e.attr("enrollmentdate"));
+				Date startDate = Utility.parseUTCDate(e.attr("startdateduration"));
+				Date endDate = Utility.parseUTCDate(e.attr("enddateduration"));
+			    System.out.println(e);
+			    String url = "https://ttu.blackboard.com/webapps/Bb-mobile-BBLEARN/courseData?course_section=GRADES&course_id=" + blackboardID + "&rich_content_level=BASIC&language=en_US&v=1&ver=4.1.4";
+			    conn = Utility.getGetConn(url);
+				Cookie.setCookies(conn, jSessionID, sessionID, sSessionID, webClientCache, otherCookie);
+				System.out.println(Utility.read(conn));
 			}
 		} catch (IOException t) {
 			TTUAuth.logError(t, "getcurrclasses", ErrorType.Fatal);
 		} catch (Throwable t) {
 			TTUAuth.logError(t, "getcurrclassesgeneral", ErrorType.APIChange,
-					htmlraw);
+					xml);
 		}
 
 		return (HashMap<String, String>) map;
@@ -180,60 +125,81 @@ public class BlackboardAuth implements IAuth {
 			return LoginResult.MAIN_LOGOUT;
 
 		try {
-			Cookie[] loginCookies = auth.getERaiderCookies();
-			Cookie[] newArray = new Cookie[loginCookies.length + 1];
-			System.arraycopy(loginCookies, 0, newArray, 0, loginCookies.length);
-			loginCookies = newArray;
-
-			int follows = 0;
-			HttpURLConnection conn;
-			conn = Utility.getGetConn(LOGIN_PAGE);
-
-			ArrayList<Cookie> cookies = Cookie.getCookies(conn);
-			currCookies = cookies;
-
-			conn = Utility.getGetConn(LOGIN2_PAGE);
-			conn.setRequestProperty("Cookie", Cookie.chain(cookies));
-			conn.setInstanceFollowRedirects(false);
-			ArrayList<Cookie> cookies2 = Cookie.getCookies(conn);
-			for (int i = 0; i < cookies2.size(); i++) {
-				Cookie cookie = cookies2.get(i);
-				if (cookie.getKey().startsWith("JSESSION")) {
-					cookies.add(cookie);
-				}
-			}
-
 			String location = "";
-			while (Utility.getLocation(conn) != null
-					&& follows++ < 15) {
-				location = Utility.getLocation(conn);
-				HttpURLConnection conn2 = Utility.getGetConn(location);
-				conn2.setInstanceFollowRedirects(false);
-				if (location.indexOf("ttu.blackboard.com/web") == -1) {
-					conn2.setRequestProperty("Cookie",
-							Cookie.chain(loginCookies));
-				} else {
-					conn2.setRequestProperty("Cookie", Cookie.chain(cookies));
-				}
-
-				ArrayList<Cookie> cookies3 = Cookie.getCookies(conn2);
-				for (int i = 0; i < cookies3.size(); i++) {
-					Cookie cookie = cookies3.get(i);
-					if (cookie.getKey().startsWith("PHPSESSID")) {
-						loginCookies[loginCookies.length - 1] = cookie;
-					}
-				}
-				conn = conn2;
+			HttpURLConnection conn = Utility.getGetConn(LOGIN_PAGE);
+			conn.setInstanceFollowRedirects(false);
+			ArrayList<Cookie> bbInitial = Cookie.getCookies(conn);
+			for (int i = 0; i < bbInitial.size(); i++) {
+				Cookie tmp = bbInitial.get(i);
+				if (tmp.getKey().equals("JSESSIONID"))
+					jSessionID = tmp;
+				else if (tmp.getKey().equals("session_id"))
+					sessionID = tmp;
+				else if (tmp.getKey().equals("s_session_id"))
+					sSessionID = tmp;
+				else if (tmp.getKey().equals("web_client_cache_guid"))
+					webClientCache = tmp;
+				else
+					otherCookie = tmp;
 			}
-			if (follows >= 13) {
-				TTUAuth.logError(new Exception("redirect loop"), "blackboardlogin", ErrorType.Fatal, location);
-				return LoginResult.OTHER;
+			
+			// connect to the CAS
+			conn = Utility.getGetConn(LOGIN2_PAGE);
+			conn.setInstanceFollowRedirects(false);
+			if (auth.getPHPCookie() == null) {
+				Cookie.setCookies(conn, auth.getELCCookie());
+				Cookie phpCookie = Cookie.getCookie(Cookie.getCookies(conn), "PHPSESSID");
+				// saves time for Blackboard and retrieveProfileImage().
+				auth.setPHPCookie(phpCookie);
+				
+				conn = Utility.getGetConn(Utility.getLocation(conn));
+				Cookie.setCookies(conn, auth.getERaiderCookies());
+				conn.setInstanceFollowRedirects(false);
+				
+				location = Utility.getLocation(conn);
+				if (location.startsWith("signin.aspx"))
+					location = "https://eraider.ttu.edu/" + location;
+				conn = Utility.getGetConn(location);
+				conn.setInstanceFollowRedirects(false);
+				Cookie.setCookies(conn, auth.getERaiderCookies());
+				// might need to set ESI and ELC here. If other areas are bugged, this is why.
+			} else {
+				/// TODO Find out what happens if we already have the PHP cookie!
+			}
+			
+			// https://webapps.itsd.ttu.edu/shim/bblearn9/index.php?elu=XXXXXXXXXX&elk=XXXXXXXXXXXXXXXX
+			conn = Utility.getGetConn(Utility.getLocation(conn));
+			conn.setInstanceFollowRedirects(false);
+			Cookie.setCookies(conn, auth.getPHPCookie(), auth.getELCCookie());
+			
+			// https://webapps.itsd.ttu.edu/shim/bblearn9/index.php/login?service=https%3A%2F%2Fttu.blackboard.com%2Fwebapps%2Fbb-auth-prov
+			// ider-cas-BBLEARN%2Fexecute%2FcasLogin%3Fcmd%3Dlogin%26authProviderId%3D_103_1%26redirectUrl%3Dhttps%253A%252F%252Fttu.blackboard
+			// .com%252Fwebapps%252Fportal%252Fexecute%252FdefaultTab%26globalLogoutEnabled%3Dtrue&renew=true
+			conn = Utility.getGetConn(Utility.getLocation(conn));
+			conn.setInstanceFollowRedirects(false);
+			Cookie.setCookies(conn, auth.getPHPCookie(), auth.getELCCookie());
+			
+			// https://ttu.blackboard.com/webapps/bb-auth-provider-cas-BBLEARN/execute/casLogin?cmd=login&authProviderId=_103_1&redirectUrl=https
+			// %3A%2F%2Fttu.blackboard.com%2Fwebapps%2Fportal%2Fexecute%2FdefaultTab&globalLogoutEnabled=true&ticket=ST-...
+			conn = Utility.getGetConn(Utility.getLocation(conn));
+			conn.setInstanceFollowRedirects(false);
+			Cookie.setCookies(conn, jSessionID, sessionID, sSessionID, webClientCache, otherCookie);
+			// sSessionID, sessionID, webClientCache are all reset here, so we need to get those again, then get those again:
+			ArrayList<Cookie> bbNext = Cookie.getCookies(conn);
+			for (int i = 0; i < bbNext.size(); i++) {
+				Cookie tmp = bbNext.get(i);
+				if (tmp.getKey().equals("session_id"))
+					sessionID = tmp;
+				else if (tmp.getKey().equals("s_session_id"))
+					sSessionID = tmp;
+				else if (tmp.getKey().equals("web_client_cache_guid"))
+					webClientCache = tmp;
 			}
 		} catch (IOException e) {
 			TTUAuth.logError(e, "blackboardlogin", ErrorType.Fatal);
 			return LoginResult.OTHER;
 		} catch (Throwable t) {
-			TTUAuth.logError(t, "blackboardlogingeneral", ErrorType.Fatal, Cookie.chain(currCookies));
+			TTUAuth.logError(t, "blackboardlogingeneral", ErrorType.Fatal, Cookie.chain(jSessionID, sessionID, sSessionID, webClientCache, otherCookie));
 			return LoginResult.OTHER;
 		}
 

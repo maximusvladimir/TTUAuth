@@ -4,6 +4,8 @@ import java.net.HttpURLConnection;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.maximusvladimir.ttuauth.AuthSettings;
+
 public class Cookie {
 	private String _key;
 	private String _value;
@@ -52,10 +54,13 @@ public class Cookie {
 		String cookie = "";
 		for (int i = 0; i < args.length; i++) {
 			if (args[i] == null) {
-				System.out.println("Danger! Cookie at index " + i + " is null.");
-				Thread.dumpStack();
+				if (AuthSettings.EXCEPTION_ON_NULL_COOKIE) {
+					throw new NullPointerException("Error: Cookie at index " + i + " is null.");
+				} else if (AuthSettings.MESSAGE_ON_NULL_COOKIE) {
+					System.out.println("Danger! Cookie at index " + i + " is null.");
+					Thread.dumpStack();
+				}
 				continue;
-				//throw new NullPointerException("Error: Cookie at index " + i + " is null.");
 			}
 			
 			cookie += args[i].getKey() + "=" + args[i].getValue();
@@ -68,6 +73,14 @@ public class Cookie {
 	public void toCookie(HttpURLConnection conn) {
 		String str = getKey() + "=" + getValue();
 		conn.setRequestProperty("Cookie", str);
+	}
+	
+	public static void setCookies(HttpURLConnection conn, String cookies) {
+		conn.setRequestProperty("Cookie", cookies);
+	}
+	
+	public static void setCookies(HttpURLConnection conn, Cookie... args) {
+		setCookies(conn, Cookie.chain(args));
 	}
 	 
 	public static ArrayList<Cookie> getCookies(HttpURLConnection conn) {
