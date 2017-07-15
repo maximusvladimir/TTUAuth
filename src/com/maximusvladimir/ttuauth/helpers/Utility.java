@@ -15,11 +15,21 @@ import java.util.List;
 import java.util.Map;
 
 import com.maximusvladimir.ttuauth.AuthSettings;
-import com.maximusvladimir.ttuauth.ErrorType;
-import com.maximusvladimir.ttuauth.TTUAuth;
 
 public class Utility {
 	private static String ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+	
+	public static String safeReplace(String str, String from, String to) {
+		if (str == null)
+			return str;
+		if (str.indexOf(from) != -1)
+			str = str.replace(from, to);
+		return str;
+	}
+	
+	public static String safeRemove(String str, String needle) {
+		return safeReplace(str, needle, "");
+	}
 	
 	public static void writeQuery(HttpURLConnection conn, KeyValue... keyValues) throws IOException {
 		String query = "";
@@ -84,7 +94,10 @@ public class Utility {
 		if (locations == null || locations.size() < 1)
 			return null;
 		
-		return locations.get(0);
+		String loc = locations.get(0);
+		if (AuthSettings.LOG_HEADER_LOCATION)
+			System.out.println(loc);
+		return loc;
 	}
 	
 	public static void sleep(long time) {
@@ -112,6 +125,20 @@ public class Utility {
 		} catch (Throwable t) {
 			return null;
 		}
+	}
+	
+	/**
+	 * Formats a given date into the format:
+	 * 2016-01-31 18:01:20
+	 * (yyyy-MM-dd HH:mm:ss)
+	 * @param d The date. If null, we will return null.
+	 * @return
+	 */
+	public static String formatDate(Date d) {
+		if (d == null)
+			return null;
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		return sdf.format(d);
 	}
 	
 	public static String read(HttpURLConnection conn) throws IOException {
@@ -145,16 +172,6 @@ public class Utility {
 	    cacheCalendar.set(Calendar.MONTH, month);
 	    cacheCalendar.set(Calendar.YEAR, year);
 	    return cacheCalendar.get(Calendar.DATE);
-	}
-	
-	public static String safeRemove(String str, String removal) {
-		if (str == null || removal == null)
-			return null;
-		
-		if (str.indexOf(removal) == -1)
-			return str;
-		
-		return str.replace(removal, "");
 	}
 	
 	public static int[] convertToTime(String str) {

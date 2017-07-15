@@ -1,27 +1,17 @@
 package com.maximusvladimir.ttuauth;
 
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.net.URLConnection;
-import java.net.URLEncoder;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.LinkedHashMap;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -33,8 +23,6 @@ import com.maximusvladimir.ttuauth.data.LoginResult;
 import com.maximusvladimir.ttuauth.data.ScheduleKey;
 import com.maximusvladimir.ttuauth.data.ScheduleNode;
 import com.maximusvladimir.ttuauth.helpers.Cookie;
-import com.maximusvladimir.ttuauth.helpers.HTMLParser;
-import com.maximusvladimir.ttuauth.helpers.HTMLTag;
 import com.maximusvladimir.ttuauth.helpers.KeyValue;
 import com.maximusvladimir.ttuauth.helpers.Utility;
 
@@ -43,13 +31,10 @@ import com.maximusvladimir.ttuauth.helpers.Utility;
  */
 public class TTUAuth implements IAuth {
 	private static String PORTAL_PAGE = "https://portal.texastech.edu/";
-	private static String LOGOUT_PAGE = "https://portal.texastech.edu/c/portal/logout";
-	private static String FINAL_GRADE_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewTermGrde";
-	private static String FINAL_GRADE_POST_PAGE = "https://ssb.texastech.edu/TTUSPRD/bwskogrd.P_ViewGrde";
 	private static String FINAL_GRADE_NEW = "https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/grades/";
 	private static String SCH_AUTH = "https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/security/validate-web-auth";
 	private static String SCH_PAGE = "https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/courses/overview/";
-	private static String GF_COOKIE_PAGE = "https://ttumsc.gradesfirst.com/cas/schools/163-texas_tech_university/session/new";
+	private static String GF_COOKIE_PAGE = "https://webapps.itsd.ttu.edu/shim/gradesfirst/index.php/login?service=https%3A%2F%2Fttumsc.gradesfirst.com%2Fcas%2Fschools%2F163-texas_tech_university%2Fsession%2Fnew";
 	private static long MAX_LOGIN_TIME = 1000 * 60 * 20;
 
 	// Direct portal login:
@@ -81,11 +66,8 @@ public class TTUAuth implements IAuth {
 	private Cookie phpCookie;
 
 	private boolean isLoggedIn = false;
-	private boolean isSSBLoggedIn = false;
 	private String raiderID = null;
 	private String name = null;
-	private boolean soonToExpire = false;
-	private boolean passwordExpired = false;
 	private int expireDays = -1;
 
 	private long loginTime = 0;
@@ -145,7 +127,7 @@ public class TTUAuth implements IAuth {
 			// https://ttumsc.gradesfirst.com/session/new -> 
 			// https://webapps.itsd.ttu.edu/shim/gradesfirst/index.php/login?service=https%3A%2F%2Fttumsc.gradesfirst.com%2Fcas%2Fschools%2F163-texas_tech_university%2Fsession%2Fnew
 			HttpURLConnection conn = null;
-			String loc = "https://webapps.itsd.ttu.edu/shim/gradesfirst/index.php/login?service=https%3A%2F%2Fttumsc.gradesfirst.com%2Fcas%2Fschools%2F163-texas_tech_university%2Fsession%2Fnew";
+			String loc = GF_COOKIE_PAGE;
 			
 			// https://webapps.itsd.ttu.edu/shim/gradesfirst/index.php/login?service=https%3A%2F%2Fttumsc.gradesfirst.com%2Fcas%2Fschools%2F163-texas_tech_university%2Fsession%2Fnew
 			int cycles = 0;
@@ -367,12 +349,14 @@ public class TTUAuth implements IAuth {
 	
 	/**
 	 * Gets a mapping of terms and the corresponding courses for
-	 * each term.
-	 * 
+	 * each term. The mappings will be in reverse order (i.e. Most recent semester
+	 * at the front of the HashMap, and oldest at the end of the HashMap).
+	 * This will not retrieve transfer schedules, only those based at TTU or
+	 * TTU Long Distance.
 	 * @throws IOException
 	 */
-	public HashMap<ScheduleKey, ArrayList<ScheduleNode>> getSchedule() {
-		HashMap<ScheduleKey, ArrayList<ScheduleNode>> nodes = new HashMap<ScheduleKey, ArrayList<ScheduleNode>>();
+	public LinkedHashMap<ScheduleKey, ArrayList<ScheduleNode>> getSchedule() {
+		LinkedHashMap<ScheduleKey, ArrayList<ScheduleNode>> nodes = new LinkedHashMap<ScheduleKey, ArrayList<ScheduleNode>>();
 		String html = "";
 		if (!isLoggedIn())
 			return nodes;
@@ -486,19 +470,25 @@ public class TTUAuth implements IAuth {
 				nodes.put(key, sections);
 			}
 			
-			// sort the terms.
-			Comparator<ScheduleKey> comparator = new Comparator<ScheduleKey>() {
-				@Override
-				public int compare(ScheduleKey arg0, ScheduleKey arg1) {
-					return arg0.getTermID().compareTo(arg1.getTermID());
-				}
+			// need to sort by term:
+			ArrayList<ScheduleKey> keysForN = new ArrayList<ScheduleKey>();
+			for (ScheduleKey current : nodes.keySet()) {
+				keysForN.add(current);
+			}
+			Comparator<ScheduleKey> skComparator = new Comparator<ScheduleKey>() {
+			    @Override
+			    public int compare(ScheduleKey o1, ScheduleKey o2) {
+			        return o2.getTermID().compareTo(o1.getTermID());
+			    }
 			};
+			Collections.sort(keysForN, skComparator);
 			
-			TreeMap<ScheduleKey, ArrayList<ScheduleNode>> tmp = new TreeMap<ScheduleKey, ArrayList<ScheduleNode>>(comparator);
-			tmp.putAll(nodes);
-			HashMap<ScheduleKey, ArrayList<ScheduleNode>> nodes2 = new HashMap<ScheduleKey, ArrayList<ScheduleNode>>();
-			nodes2.putAll(tmp);
-			nodes = nodes2;
+			LinkedHashMap<ScheduleKey, ArrayList<ScheduleNode>> tmp = new LinkedHashMap<ScheduleKey, ArrayList<ScheduleNode>>();
+			for (ScheduleKey k : keysForN) {
+				tmp.put(k, nodes.get(k));
+			}
+			
+			nodes = tmp;
 		} catch (IOException t) {
 			TTUAuth.logError(t, "getsch", ErrorType.Fatal);
 		} catch (Throwable t) {
@@ -526,7 +516,11 @@ public class TTUAuth implements IAuth {
 			conn = Utility.getGetConn(ERAIDER_CAS_LOGIN);
 			conn.setRequestProperty("Referer", PORTAL_CAS_LOGIN);
 			conn.setInstanceFollowRedirects(false);
-			casERaider = Cookie.getCookieStartsWith(Cookie.getCookies(conn), "ASPSESS");
+			ArrayList<Cookie> cacheCookies = Cookie.getCookies(conn);
+			casERaider = Cookie.getCookieStartsWith(cacheCookies, "ASPSESS");
+			if (cacheCookies.size() == 0) {
+				System.err.println("Could not grab the cookies for log in. Ensure that if you use Fiddler in the testing, that Fiddler is actually running.");
+			}
 			
 			
 			conn = Utility.getGetConn(ERAIDER_CAS_LOGIN_FEDERATE);
@@ -755,7 +749,7 @@ public class TTUAuth implements IAuth {
 		
 		String stack = "";
 		if (t != null) {
-			stack = "{";
+			stack = "{ ";
 			StackTraceElement[] els = t.getStackTrace();
 			for (int i = 0; i < els.length; i++) {
 				StackTraceElement ste = els[i];
@@ -764,7 +758,7 @@ public class TTUAuth implements IAuth {
 					stack += "-> ";
 				}
 			}
-			stack += "}";
+			stack += " }";
 		}
 		
 		System.err.println("An error has occured"

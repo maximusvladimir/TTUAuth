@@ -126,7 +126,8 @@ public class RaiderFundAuth implements IAuth {
 			// https://webapps.itsd.ttu.edu/shim/getfunds/index.php/login?service=https%3A%2F%2Fget.cbord.com%2Fraidercard%2Ffull%2Flogin.php
 			conn = Utility.getGetConn(location);
 			conn.setInstanceFollowRedirects(false);
-			if (auth.getPHPCookie() == null) {
+			// TODO: future speed optimization
+			//if (auth.getPHPCookie() == null) {
 				conn.setRequestProperty("Cookie", Cookie.chain(auth.getELCCookie()));
 				Cookie phpCookie = Cookie.getCookie(Cookie.getCookies(conn), "PHPSESSID");
 				// saves time for Blackboard and retrieveProfileImage().
@@ -143,11 +144,11 @@ public class RaiderFundAuth implements IAuth {
 				conn.setInstanceFollowRedirects(false);
 				conn.setRequestProperty("Cookie", Cookie.chain(auth.getERaiderCookies()));
 				// might need to set ESI and ELC here. If other areas are bugged, this is why.
-			} else {
+			/*} else {
 				conn.setRequestProperty("Cookie", Cookie.chain(auth.getELCCookie(), auth.getPHPCookie()));
 				/// TODO This is in retirevProfileImage, maybe Mobile Login, and Blackboard!!!
 				throw new NullPointerException("Needs implementation!");
-			}
+			}*/
 			
 			// https://webapps.itsd.ttu.edu/shim/getfunds/index.php?elu=XXXXXXXXXX&elk=XXXXXXXXXXXXXXXX
 			conn = Utility.getGetConn(Utility.getLocation(conn));

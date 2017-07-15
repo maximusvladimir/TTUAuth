@@ -24,4 +24,8 @@ public class AuthSettings {
 	 * Note: Be careful with enabling this, as some error reporting chains cookies together!
 	 */
 	public static boolean EXCEPTION_ON_NULL_COOKIE = false;
+	/**
+	 * Logs all Utility.getLocation results to standard out when turned on.
+	 */
+	public static boolean LOG_HEADER_LOCATION = false;
 }

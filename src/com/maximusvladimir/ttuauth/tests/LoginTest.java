@@ -14,12 +14,14 @@ import com.maximusvladimir.ttuauth.BlackboardAuth;
 import com.maximusvladimir.ttuauth.RaiderFundAuth;
 import com.maximusvladimir.ttuauth.RateMyProfessor;
 import com.maximusvladimir.ttuauth.TTUAuth;
+import com.maximusvladimir.ttuauth.data.BBClass;
+import com.maximusvladimir.ttuauth.data.BBGradeNode;
 import com.maximusvladimir.ttuauth.data.ScheduleKey;
 import com.maximusvladimir.ttuauth.data.ScheduleNode;
 import com.maximusvladimir.ttuauth.helpers.Utility;
 
 public class LoginTest {
-	public static final boolean USE_FIDDLER = true;
+	public static final boolean USE_FIDDLER = false;
 	private static String keystoreloc = null;
 	private static String keystorepassword = null;
 
@@ -82,7 +84,7 @@ public class LoginTest {
 		
 		
 		// Schedule:
-		/*start = System.currentTimeMillis();
+		start = System.currentTimeMillis();
 		HashMap<ScheduleKey, ArrayList<ScheduleNode>> m = auth.getSchedule();
 		for (ScheduleKey k : m.keySet()) {
 			System.out.println(k.getTermID() + ": ");
@@ -91,19 +93,22 @@ public class LoginTest {
 			}
 		}
 		end = System.currentTimeMillis();
-		System.out.println("Schedule: " + (end - start) + " ms.");*/
+		System.out.println("Schedule: " + (end - start) + " ms.");
 		
 		
 		// Blackboard:
-		start = System.currentTimeMillis();
+		/*start = System.currentTimeMillis();
 		BlackboardAuth bb = new BlackboardAuth(auth);
 		bb.login();
-		HashMap<String, String> classes = bb.getCurrentClasses();
-		for (String classID : classes.keySet()) {
-			System.out.println(bb.getClassGrades(classID));
+		ArrayList<BBClass> classes = bb.getCurrentClasses();
+		for (BBClass classID : classes) {
+			System.out.println(classID);
+			for (BBGradeNode node : bb.getClassGrades(classID.getBlackboardID())) {
+				System.out.println("\t" + node);
+			}
 		}
 		end = System.currentTimeMillis();
-		System.out.println("Blackboard took: " + (end - start) + " ms.");
+		System.out.println("Blackboard took: " + (end - start) + " ms.");*/
 		
 		auth.logout();
 	}
