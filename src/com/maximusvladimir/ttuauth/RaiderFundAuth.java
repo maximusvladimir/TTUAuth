@@ -15,16 +15,14 @@ import com.maximusvladimir.ttuauth.helpers.Cookie;
 import com.maximusvladimir.ttuauth.helpers.Utility;
 
 public class RaiderFundAuth implements IAuth {
-	private static String FUND_LOGIN = "https://webapps.itsd.ttu.edu/shim/getfunds/index.php/login?service=https%3A%2F%2Fget.cbord.com%2Fraidercard%2Ffull%2Flogin.php";
-	private static String FUND_COOKIE = "https://get.cbord.com/raidercard/full/login.php";
-	private static String CAS1_LOGIN = "https://eraider.ttu.edu/signin.asp?redirect=https%3A%2F%2Fwebapps.itsd.ttu.edu%2Fshim%2Fgetfunds%2Findex.php";
 	private static String FUND_INDEX = "https://get.cbord.com/raidercard/full/index.php";
 	private static String FUND_HOME = "https://get.cbord.com/raidercard/full/funds_home.php";
+	private static String FUND_LOGIN = "https://get.cbord.com/raidercard/full/login.php";
 	private static String FUND_OVERVIEW = "https://get.cbord.com/raidercard/full/funds_overview_partial.php";
 
-	private Cookie awseCookie;
-	private Cookie phpCookie1;
-	private Cookie phpCookie2;
+	private Cookie aws;
+	private Cookie php;
+	private Cookie dummy = new Cookie("no_login_guest_user", "");
 
 	private boolean loggedIn = false;
 
@@ -60,9 +58,9 @@ public class RaiderFundAuth implements IAuth {
 		try {
 			HttpURLConnection conn = Utility.getGetConn(FUND_HOME);
 			conn.setInstanceFollowRedirects(false);
-			conn.setRequestProperty("Cookie", Cookie.chain(awseCookie,
-					phpCookie1, phpCookie2, new Cookie("no_login_guest_user", "")));
+			conn.setRequestProperty("Cookie", Cookie.chain(aws, php, dummy));
 			html = Utility.read(conn);
+			//System.out.println(html);
 			int index = html.indexOf("getOverview");
 			String userID = html.substring(index);
 			userID = userID.substring(userID.indexOf("(") + 2,
@@ -80,8 +78,7 @@ public class RaiderFundAuth implements IAuth {
 			conn.setInstanceFollowRedirects(false);
 			conn.setRequestProperty("Referer",
 					"https://get.cbord.com/raidercard/full/funds_home.php");
-			conn.setRequestProperty("Cookie", Cookie.chain(awseCookie,
-					phpCookie1, phpCookie2, new Cookie("no_login_guest_user", "")));
+			conn.setRequestProperty("Cookie", Cookie.chain(aws, php, dummy));
 			DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
 			dos.writeBytes(query);
 			dos.close();
@@ -115,92 +112,67 @@ public class RaiderFundAuth implements IAuth {
 			return LoginResult.MAIN_LOGOUT;
 
 		try {
-			HttpURLConnection conn = Utility.getGetConn(FUND_COOKIE);
+			HttpURLConnection conn = Utility.getGetConn(FUND_INDEX);
 			conn.setInstanceFollowRedirects(false);
-			ArrayList<Cookie> cookies = Cookie.getCookies(conn);
-			for (int i = 0; i < cookies.size(); i++) {
-				Cookie cookie = cookies.get(i);
-				if (cookie.getKey().startsWith("AWSE")) {
-					awseCookie = cookie;
-				}
-				if (cookie.getKey().startsWith("PHPS")) {
-					if (phpCookie1 == null)
-						phpCookie1 = cookie;
-					else
-						phpCookie2 = cookie;
-				}
-			}
-			if (awseCookie == null || phpCookie1 == null || phpCookie2 == null)
-				TTUAuth.logError(new IOException("Cookie values: " + awseCookie
-						+ " " + phpCookie1 + " " + phpCookie2), "raiderfundlogincookie",
-						ErrorType.APIChange);
-
+			ArrayList<Cookie> tmpCookies = Cookie.getCookies(conn);
+			aws = Cookie.getCookie(tmpCookies, "AWSELB");
+			php = Cookie.getCookie(tmpCookies, "PHPSESSID");
+			
 			conn = Utility.getGetConn(FUND_LOGIN);
 			conn.setInstanceFollowRedirects(false);
-			conn.setRequestProperty("Cookie",
-					Cookie.chain(auth.getSharedLoginCookies()));
-			cookies = Cookie.getCookies(conn);
-			Cookie php2 = null;
-			for (int i = 0; i < cookies.size(); i++) {
-				Cookie cookie = cookies.get(i);
-				if (cookie.getKey().startsWith("PHPS")) {
-					php2 = cookie;
-				}
-			}
-			if (php2 == null)
-				TTUAuth.logError(new IOException("Cookie value: " + php2),
-						"raiderfundlogincookie", ErrorType.APIChange);
-
-			Cookie[] cs = auth.getSharedLoginCookies();
-			ArrayList<Cookie> cs2 = new ArrayList<Cookie>();
-			for (int i = 0; i < cs.length; i++) {
-				cs2.add(cs[i]);
-			}
-			cs2.add(php2);
-
-			conn = Utility.getGetConn(CAS1_LOGIN);
-			conn.setInstanceFollowRedirects(false);
-			conn.setRequestProperty("Cookie", Cookie.chain(cs2));
-			Utility.readByte(conn);
-
+			conn.setRequestProperty("Cookie", Cookie.chain(aws, php));
 			String location = Utility.getLocation(conn);
-			if (location == null) {
-				TTUAuth.logError(new IOException("Bad location response."),
-						"raiderfundlocation", ErrorType.Severe);
-				return LoginResult.OTHER;
-			}
+			
+			// https://webapps.itsd.ttu.edu/shim/getfunds/index.php/login?service=https%3A%2F%2Fget.cbord.com%2Fraidercard%2Ffull%2Flogin.php
 			conn = Utility.getGetConn(location);
 			conn.setInstanceFollowRedirects(false);
-			conn.setRequestProperty("Cookie", Cookie.chain(cs2));
-			Utility.readByte(conn);
-
-			conn = Utility.getGetConn(CAS1_LOGIN);
+			// TODO: future speed optimization
+			//if (auth.getPHPCookie() == null) {
+				conn.setRequestProperty("Cookie", Cookie.chain(auth.getELCCookie()));
+				Cookie phpCookie = Cookie.getCookie(Cookie.getCookies(conn), "PHPSESSID");
+				// saves time for Blackboard and retrieveProfileImage().
+				auth.setPHPCookie(phpCookie);
+				
+				conn = Utility.getGetConn(Utility.getLocation(conn));
+				conn.setRequestProperty("Cookie", Cookie.chain(auth.getERaiderCookies()));
+				conn.setInstanceFollowRedirects(false);
+				
+				location = Utility.getLocation(conn);
+				if (location.startsWith("signin.aspx"))
+					location = "https://eraider.ttu.edu/" + location;
+				conn = Utility.getGetConn(location);
+				conn.setInstanceFollowRedirects(false);
+				conn.setRequestProperty("Cookie", Cookie.chain(auth.getERaiderCookies()));
+				// might need to set ESI and ELC here. If other areas are bugged, this is why.
+			/*} else {
+				conn.setRequestProperty("Cookie", Cookie.chain(auth.getELCCookie(), auth.getPHPCookie()));
+				/// TODO This is in retirevProfileImage, maybe Mobile Login, and Blackboard!!!
+				throw new NullPointerException("Needs implementation!");
+			}*/
+			
+			// https://webapps.itsd.ttu.edu/shim/getfunds/index.php?elu=XXXXXXXXXX&elk=XXXXXXXXXXXXXXXX
+			conn = Utility.getGetConn(Utility.getLocation(conn));
 			conn.setInstanceFollowRedirects(false);
-			conn.setRequestProperty("Cookie",
-					Cookie.chain(awseCookie, phpCookie1, phpCookie2));
-			Utility.readByte(conn);
-
-			conn = Utility.getGetConn(FUND_LOGIN);
+			conn.setRequestProperty("Cookie", Cookie.chain(auth.getPHPCookie(), auth.getELCCookie()));
+			
+			// https://webapps.itsd.ttu.edu/shim/getfunds/index.php/login?service=https%3A%2F%2Fget.cbord.com%2Fraidercard%2Ffull%2Flogin.php
+			conn = Utility.getGetConn(Utility.getLocation(conn));
 			conn.setInstanceFollowRedirects(false);
-			conn.setRequestProperty("Cookie", Cookie.chain(cs2));
-			Utility.readByte(conn);
-
+			conn.setRequestProperty("Cookie", Cookie.chain(auth.getPHPCookie(), auth.getELCCookie()));
+			
+			// https://get.cbord.com/raidercard/full/login.php?ticket=ST-...
+			conn = Utility.getGetConn(Utility.getLocation(conn));
+			conn.setInstanceFollowRedirects(false);
+			conn.setRequestProperty("Cookie", Cookie.chain(aws, php));
+			
+			// https://get.cbord.com/raidercard/full/funds_home.php
 			location = Utility.getLocation(conn);
-			if (location == null) {
-				TTUAuth.logError(new IOException("Bad location response."),
-						"raiderfundlocation", ErrorType.Severe);
-				return LoginResult.OTHER;
+			if (location.startsWith("index.")) {
+				location = "https://get.cbord.com/raidercard/full/" + location;
 			}
 			conn = Utility.getGetConn(location);
 			conn.setInstanceFollowRedirects(false);
-			conn.setRequestProperty("Cookie",
-					Cookie.chain(awseCookie, phpCookie1, phpCookie2));
-			Utility.readByte(conn);
-
-			conn = Utility.getGetConn(FUND_INDEX);
-			conn.setInstanceFollowRedirects(false);
-			conn.setRequestProperty("Cookie", Cookie.chain(awseCookie,
-					phpCookie1, phpCookie2, new Cookie("no_login_guest_user", "")));
+			conn.setRequestProperty("Cookie", Cookie.chain(aws, php));
 			Utility.readByte(conn);
 		} catch (IOException e) {
 			TTUAuth.logError(e, "raiderfundlogin", ErrorType.Fatal);

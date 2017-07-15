@@ -1,11 +1,16 @@
 package com.maximusvladimir.ttuauth.helpers;
 
 import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -13,6 +18,36 @@ import com.maximusvladimir.ttuauth.AuthSettings;
 
 public class Utility {
 	private static String ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+	
+	public static String safeReplace(String str, String from, String to) {
+		if (str == null)
+			return str;
+		if (str.indexOf(from) != -1)
+			str = str.replace(from, to);
+		return str;
+	}
+	
+	public static String safeRemove(String str, String needle) {
+		return safeReplace(str, needle, "");
+	}
+	
+	public static void writeQuery(HttpURLConnection conn, KeyValue... keyValues) throws IOException {
+		String query = "";
+		for (int i = 0; i < keyValues.length; i++) {
+			KeyValue kv = keyValues[i];
+			try {
+				query += kv.key + "=" + URLEncoder.encode(kv.value, "UTF-8") + "&";
+			} catch (UnsupportedEncodingException e) {
+			}
+		}
+		if (query.endsWith("&")) {
+			query = query.substring(0, query.length() - 1);
+		}
+		conn.setRequestProperty("Content-Length", query.length() + "");
+		DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
+		dos.writeBytes(query);
+		dos.close();
+	}
 	
 	public static HttpURLConnection getGetConn(String url) throws IOException {
 		URL u = new URL(url);
@@ -59,7 +94,10 @@ public class Utility {
 		if (locations == null || locations.size() < 1)
 			return null;
 		
-		return locations.get(0);
+		String loc = locations.get(0);
+		if (AuthSettings.LOG_HEADER_LOCATION)
+			System.out.println(loc);
+		return loc;
 	}
 	
 	public static void sleep(long time) {
@@ -67,6 +105,40 @@ public class Utility {
 		while (System.currentTimeMillis() - start < time) {
 			Thread.yield();
 		}
+	}
+	
+	/**
+	 * Parses a date in the format:
+	 * 2017-07-13T22:48:18-0500
+	 * or
+	 * 2016-09-06T09:48:16-0500Z
+	 * @param str The string to parse. Must NOT be null!!!
+	 * @return Returns null on failure.
+	 */
+	public static Date parseUTCDate(String str) {
+		if (str.endsWith("Z")) {
+			str = str.substring(0, str.length() - 1);
+		}
+		try {
+			SimpleDateFormat parser = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+	        return parser.parse(str);
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+	
+	/**
+	 * Formats a given date into the format:
+	 * 2016-01-31 18:01:20
+	 * (yyyy-MM-dd HH:mm:ss)
+	 * @param d The date. If null, we will return null.
+	 * @return
+	 */
+	public static String formatDate(Date d) {
+		if (d == null)
+			return null;
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		return sdf.format(d);
 	}
 	
 	public static String read(HttpURLConnection conn) throws IOException {
@@ -100,16 +172,6 @@ public class Utility {
 	    cacheCalendar.set(Calendar.MONTH, month);
 	    cacheCalendar.set(Calendar.YEAR, year);
 	    return cacheCalendar.get(Calendar.DATE);
-	}
-	
-	public static String safeRemove(String str, String removal) {
-		if (str == null || removal == null)
-			return null;
-		
-		if (str.indexOf(removal) == -1)
-			return str;
-		
-		return str.replace(removal, "");
 	}
 	
 	public static int[] convertToTime(String str) {
