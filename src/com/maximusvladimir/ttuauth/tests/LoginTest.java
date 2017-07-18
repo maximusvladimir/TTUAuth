@@ -16,6 +16,8 @@ import com.maximusvladimir.ttuauth.RateMyProfessor;
 import com.maximusvladimir.ttuauth.TTUAuth;
 import com.maximusvladimir.ttuauth.data.BBClass;
 import com.maximusvladimir.ttuauth.data.BBGradeNode;
+import com.maximusvladimir.ttuauth.data.FinalGradeNode;
+import com.maximusvladimir.ttuauth.data.FinalGradeTerm;
 import com.maximusvladimir.ttuauth.data.ScheduleKey;
 import com.maximusvladimir.ttuauth.data.ScheduleNode;
 import com.maximusvladimir.ttuauth.helpers.Utility;
@@ -77,14 +79,18 @@ public class LoginTest {
 
 		
 		// Final Grades:
-		/*start = System.currentTimeMillis();
-		auth.getFinalGrades();
+		start = System.currentTimeMillis();
+		ArrayList<FinalGradeTerm> fgterms = auth.getFinalGrades();
+		for (int i = 0; i < fgterms.size(); i++) {
+			FinalGradeTerm fgterm = fgterms.get(i);
+			System.out.println(fgterm);
+		}
 		end = System.currentTimeMillis();
-		System.out.println("Final Grades: " + (end - start) + " ms.");*/
+		System.out.println("Final Grades: " + (end - start) + " ms.");
 		
 		
 		// Schedule:
-		start = System.currentTimeMillis();
+		/*start = System.currentTimeMillis();
 		HashMap<ScheduleKey, ArrayList<ScheduleNode>> m = auth.getSchedule();
 		for (ScheduleKey k : m.keySet()) {
 			System.out.println(k.getTermID() + ": ");
@@ -93,7 +99,7 @@ public class LoginTest {
 			}
 		}
 		end = System.currentTimeMillis();
-		System.out.println("Schedule: " + (end - start) + " ms.");
+		System.out.println("Schedule: " + (end - start) + " ms.");*/
 		
 		
 		// Blackboard:

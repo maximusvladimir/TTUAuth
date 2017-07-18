@@ -208,8 +208,11 @@ public class TTUAuth implements IAuth {
 		ArrayList<FinalGradeTerm> fgtarray = new ArrayList<FinalGradeTerm>();
 		String html = "";
 		if (!isLoggedIn())
-			return null;
+			return fgtarray;
 		try {
+			if (cookieMobile == null) {
+				cookieMobile = doMobileLogin();
+			}
 			if (cookieMobile == null) {
 				cookieMobile = doMobileLogin();
 			}
@@ -364,6 +367,9 @@ public class TTUAuth implements IAuth {
 			if (cookieMobile == null) {
 				cookieMobile = doMobileLogin();
 			}
+			if (cookieMobile == null) {
+				cookieMobile = doMobileLogin();
+			}
 			
 			
 			HttpURLConnection conn = Utility.getGetConn(SCH_PAGE + getRaiderID().toUpperCase());
@@ -511,6 +517,12 @@ public class TTUAuth implements IAuth {
 			conn.setRequestProperty("Referer", "https://portal.texastech.edu/");
 			conn.setInstanceFollowRedirects(false);
 			casInitialCookie = Cookie.getCookie(Cookie.getCookies(conn), "JSESSIONID");
+			if (casInitialCookie == null) {
+				conn = Utility.getGetConn(PORTAL_CAS_LOGIN);
+				conn.setRequestProperty("Referer", "https://portal.texastech.edu/");
+				conn.setInstanceFollowRedirects(false);
+				casInitialCookie = Cookie.getCookie(Cookie.getCookies(conn), "JSESSIONID");
+			}
 			
 			
 			conn = Utility.getGetConn(ERAIDER_CAS_LOGIN);
@@ -541,6 +553,18 @@ public class TTUAuth implements IAuth {
 			String federatedRedirect = Utility.getLocation(conn);
 			if (federatedRedirect == null)
 				return LoginResult.BAD_AUTH;
+			if (cookieMSISAuth == null) {
+				conn = Utility.getPostConn(federatedSignOn);
+				conn.setInstanceFollowRedirects(false);
+				conn.setRequestProperty("Referer", ERAIDER_CAS_LOGIN_FEDERATE);
+				Utility.writeQuery(conn, new KeyValue("UserName", username.startsWith("ttu\\") ? username : "ttu\\" + username),
+						new KeyValue("Password", password), new KeyValue("AuthMethod", "FormsAuthentication"));
+				// and let's grab the MSIS cookie:
+				cookieMSISAuth = Cookie.getCookie(Cookie.getCookies(conn), "MSISAuth");
+				federatedRedirect = Utility.getLocation(conn);
+				if (federatedRedirect == null)
+					return LoginResult.BAD_AUTH;
+			}
 			
 			
 			conn = Utility.getGetConn(federatedRedirect);
@@ -570,6 +594,17 @@ public class TTUAuth implements IAuth {
 			loginTime = System.currentTimeMillis();
 			cookieFedAuth = Cookie.getCookie(cookies, "FedAuth");
 			cookieFedAuth1 = Cookie.getCookie(cookies, "FedAuth1");
+			if (cookieFedAuth == null || cookieFedAuth1 == null) {
+				conn = Utility.getPostConn("https://eraider.ttu.edu/");
+				conn.setInstanceFollowRedirects(false);
+				conn.setRequestProperty("Referer", federatedRedirect);
+				conn.setRequestProperty("Cookie", Cookie.chain(casERaider));
+				Utility.writeQuery(conn, wa, wresult, wctx);
+				cookies = Cookie.getCookies(conn);
+				loginTime = System.currentTimeMillis();
+				cookieFedAuth = Cookie.getCookie(cookies, "FedAuth");
+				cookieFedAuth1 = Cookie.getCookie(cookies, "FedAuth1");
+			}
 			
 			
 			conn = Utility.getGetConn(ERAIDER_CAS_LOGIN_FEDERATE);
@@ -580,6 +615,17 @@ public class TTUAuth implements IAuth {
 			cookieESI = Cookie.getCookie(cookies, "esi");
 			cookieASPNET_SESSIONID = Cookie.getCookie(cookies, "ASP.NET_SessionId");
 			String next = Utility.getLocation(conn);
+			if (cookieELC == null || cookieESI == null || cookieASPNET_SESSIONID == null) {
+				conn = Utility.getGetConn(ERAIDER_CAS_LOGIN_FEDERATE);
+				conn.setRequestProperty("Cookie", Cookie.chain(casERaider, cookieFedAuth, cookieFedAuth1));
+				conn.setInstanceFollowRedirects(false);
+				cookies = Cookie.getCookies(conn);
+				cookieELC = Cookie.getCookie(cookies, "elc");
+				cookieESI = Cookie.getCookie(cookies, "esi");
+				cookieASPNET_SESSIONID = Cookie.getCookie(cookies, "ASP.NET_SessionId");
+				next = Utility.getLocation(conn);
+			}
+			String pushedNext = next;
 			
 			
 			while (next != null && next.indexOf("cas.texastech.edu/sso") != -1) {
@@ -595,11 +641,32 @@ public class TTUAuth implements IAuth {
 				}
 				next = Utility.getLocation(tmp);
 			}
+			if (casCookie == null) {
+				next = pushedNext;
+				while (next != null && next.indexOf("cas.texastech.edu/sso") != -1) {
+					HttpURLConnection tmp = Utility.getGetConn(next);
+					tmp.setInstanceFollowRedirects(false);
+					tmp.setRequestProperty("Cookie", Cookie.chain(casCookie == null ? casInitialCookie : casCookie));
+					
+					cookies = Cookie.getCookies(tmp);
+					if (cookies.size() > 0) {
+						if (Cookie.getCookie(cookies, "JSESSIONID") != null) {
+							casCookie = Cookie.getCookie(cookies, "JSESSIONID");
+						}
+					}
+					next = Utility.getLocation(tmp);
+				}
+			}
 			
 			
 			conn = Utility.getGetConn(next);
 			conn.setInstanceFollowRedirects(false);
 			cookiePortal = Cookie.getCookie(Cookie.getCookies(conn), "JSESSIONID");
+			if (cookiePortal == null) {
+				conn = Utility.getGetConn(next);
+				conn.setInstanceFollowRedirects(false);
+				cookiePortal = Cookie.getCookie(Cookie.getCookies(conn), "JSESSIONID");
+			}
 			
 			
 			conn = Utility.getGetConn(PORTAL_PAGE);
