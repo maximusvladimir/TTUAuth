@@ -129,4 +129,9 @@ public class Cookie {
 		}
 		return null;
 	}
+
+	public static void setCookies(HttpURLConnection conn,
+			ArrayList<Cookie> cookies) {
+		setCookies(conn, Cookie.chain(cookies));
+	}
 }

@@ -30,7 +30,8 @@ import com.maximusvladimir.ttuauth.helpers.Utility;
  * A general purpose class for accessing the main TTU website.
  */
 public class TTUAuth implements IAuth {
-	private static String PORTAL_PAGE = "https://portal.texastech.edu/";
+	private static String PORTAL_PAGE = "https://portal.texastech.edu/web/ttu/my-tech";
+	private static String PORTLET_RAIDER_ID = "https://portal.texastech.edu/c/portal/render_portlet?p_l_id=%%%%&p_p_id=WebProxyPortlet_WAR_WebProxyPortlet100SNAPSHOT_INSTANCE_bEJQWzx37RHc&p_p_lifecycle=0&p_t_lifecycle=0&p_p_state=normal&p_p_mode=view&p_p_col_id=column-2&p_p_col_pos=0&p_p_col_count=4&p_p_isolated=1&currentURL=%2Fweb%2Fttu%2Fmy-tech";
 	private static String FINAL_GRADE_NEW = "https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/grades/";
 	private static String SCH_AUTH = "https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/security/validate-web-auth";
 	private static String SCH_PAGE = "https://mobile.texastech.edu/ProdTTU-banner-mobileserver/api/2.0/courses/overview/";
@@ -611,19 +612,45 @@ public class TTUAuth implements IAuth {
 			conn.setRequestProperty("Cookie", Cookie.chain(casERaider, cookieFedAuth, cookieFedAuth1));
 			conn.setInstanceFollowRedirects(false);
 			cookies = Cookie.getCookies(conn);
+			cookieASPNET_SESSIONID = Cookie.getCookie(cookies, "ASP.NET_SessionId");
+			
+			String next = "";
+			String contents = Utility.read(conn);
+			expireDays = -1;
+			int expiringIndex = contents.indexOf("Your eRaider password will expire in ");
+			if (expiringIndex != -1) {
+				String subContents = contents.substring(expiringIndex);
+		      	String strong = "<strong>", strongEnd = "</strong>";
+		      	int strongIndex = subContents.indexOf(strong);
+		      	int strongEndIndex = subContents.indexOf(strongEnd);
+		      	subContents = subContents.substring(strongIndex + strong.length(), strongEndIndex);
+		      	if (subContents.indexOf(" day(s)") != -1) {
+		          subContents = subContents.replace(" day(s)", "");
+		      	}
+		      	expireDays = Integer.parseInt(subContents);
+		      	
+		      	HttpURLConnection conn2 = Utility.getNextRedirectFromLoginPage(contents, Cookie.chain(casERaider, 
+		      			cookieFedAuth, cookieFedAuth1, cookieASPNET_SESSIONID));
+		      	conn2.setInstanceFollowRedirects(false);
+		      	cookies = Cookie.getCookies(conn2);
+		      	next = Utility.getLocation(conn2);
+			} else {
+				next = Utility.getLocation(conn);
+			}
+			
 			cookieELC = Cookie.getCookie(cookies, "elc");
 			cookieESI = Cookie.getCookie(cookies, "esi");
-			cookieASPNET_SESSIONID = Cookie.getCookie(cookies, "ASP.NET_SessionId");
-			String next = Utility.getLocation(conn);
 			if (cookieELC == null || cookieESI == null || cookieASPNET_SESSIONID == null) {
 				conn = Utility.getGetConn(ERAIDER_CAS_LOGIN_FEDERATE);
 				conn.setRequestProperty("Cookie", Cookie.chain(casERaider, cookieFedAuth, cookieFedAuth1));
 				conn.setInstanceFollowRedirects(false);
 				cookies = Cookie.getCookies(conn);
-				cookieELC = Cookie.getCookie(cookies, "elc");
-				cookieESI = Cookie.getCookie(cookies, "esi");
 				cookieASPNET_SESSIONID = Cookie.getCookie(cookies, "ASP.NET_SessionId");
 				next = Utility.getLocation(conn);
+				
+				cookieASPNET_SESSIONID = Cookie.getCookie(cookies, "ASP.NET_SessionId");
+				cookieELC = Cookie.getCookie(cookies, "elc");
+				cookieESI = Cookie.getCookie(cookies, "esi");
 			}
 			String pushedNext = next;
 			
@@ -672,11 +699,27 @@ public class TTUAuth implements IAuth {
 			conn = Utility.getGetConn(PORTAL_PAGE);
 			conn.setInstanceFollowRedirects(false);
 			conn.setRequestProperty("Cookie", Cookie.chain(cookiePortal));
+			cookies = Cookie.getCookies(conn);
+			//Cookie lfr = Cookie.getCookieStartsWith(cookies, "LFR_SESSION_STATE");
 			String html = Utility.read(conn);
 			doc = Jsoup.parse(html);
-			String strRaiderID = doc.select("#dockbarRNumber").text();
 			String strName = doc.select("#dockbarDisplayName").text();
-			raiderID = strRaiderID;
+			
+			// now we have to find the RaiderID, even though the login was successful...
+			String rIDMatch = "Your R# is ";
+			String finderMatch = "getPlid";
+			int plidStart = html.indexOf(finderMatch);
+			String plidTrunc = html.substring(plidStart);
+			plidTrunc = plidTrunc.substring(plidTrunc.indexOf("\"")+1);
+			plidTrunc = plidTrunc.substring(0, plidTrunc.indexOf("\""));
+			conn = Utility.getPostConn(PORTLET_RAIDER_ID.replace("%%%%", plidTrunc), false);
+			Cookie.setCookies(conn, cookiePortal, new Cookie("GUEST_LANGUAGE_ID", "en_US"), new Cookie("COOKIE_SUPPORT", "true"));
+			conn.setRequestProperty("Content-Length", "0");
+			String html2 = Utility.read(conn);
+			html2 = html2.substring(html2.indexOf(rIDMatch) + rIDMatch.length());
+			html2 = html2.substring(0, html2.indexOf("<"));
+			
+			raiderID = html2;
 			name = strName;
 		} catch (IOException e) {
 			TTUAuth.logError(e, "login", ErrorType.Fatal);
@@ -688,7 +731,7 @@ public class TTUAuth implements IAuth {
 
 		isLoggedIn = true;
 		
-		return LoginResult.SUCCESS;
+		return expireDays == -1 ? LoginResult.SUCCESS : LoginResult.PASSWORD_EXPIRING;
 	}
 
 	/**

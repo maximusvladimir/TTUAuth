@@ -9,15 +9,55 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+
 import com.maximusvladimir.ttuauth.AuthSettings;
 
 public class Utility {
 	private static String ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+	
+	public static void generateDebugMessageInFiddler() {
+		try {
+			HttpURLConnection url = Utility.getGetConn("https://www.google.com/THIS/IS/A/BREAKPOINT/");
+			Utility.read(url);
+		} catch (Throwable t) {
+		}
+	}
+	
+	public static HttpURLConnection getNextRedirectFromLoginPage(String currentPageContents, String cookies) throws IOException {
+		Document doc = Jsoup.parse(currentPageContents);
+		KeyValue viewState = null;
+		KeyValue viewStateGenerator = null;
+		KeyValue eventValidation = null;
+		KeyValue eventTarget = new KeyValue("__EVENTTARGET", "ctl00$MainContent$passwordnotice$lnkContinue");
+		KeyValue eventArgument = new KeyValue("__EVENTARGUMENT", "");
+		String action = "";
+		for (Element element : doc.select("input")) {
+			String name = element.attr("name");
+			if (name.equals("__VIEWSTATE"))
+				viewState = new KeyValue("__VIEWSTATE", element.attr("value"));
+			if (name.equals("__VIEWSTATEGENERATOR"))
+				viewStateGenerator = new KeyValue("__VIEWSTATEGENERATOR", element.attr("value"));
+			if (name.equals("__EVENTVALIDATION"))
+				eventValidation = new KeyValue("__EVENTVALIDATION", element.attr("value"));
+		}
+		for (Element element : doc.select("form")) {
+			action = element.attr("action");
+		}
+		
+		HttpURLConnection conn = Utility.getPostConn("https://eraider.ttu.edu" + action.substring(1));
+		Cookie.setCookies(conn, cookies);
+		Utility.writeQuery(conn, viewState, viewStateGenerator, eventValidation, eventTarget, eventArgument);
+		return conn;
+	}
 	
 	public static String safeReplace(String str, String from, String to) {
 		if (str == null)
@@ -67,6 +107,10 @@ public class Utility {
 	}
 	
 	public static HttpURLConnection getPostConn(String url) throws IOException {
+		return getPostConn(url, true);
+	}
+	
+	public static HttpURLConnection getPostConn(String url, boolean setContentType) throws IOException {
 		URL u = new URL(url);
 		HttpURLConnection conn = (HttpURLConnection) u.openConnection();
 		conn.setRequestMethod("POST");
@@ -81,7 +125,9 @@ public class Utility {
 		conn.setRequestProperty("Accept", ACCEPT);
 		conn.setRequestProperty("User-Agent", AuthSettings.USER_AGENT);
 		conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
-		conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+		if (setContentType) {
+			conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+		}
 		return conn;
 	}
 	
